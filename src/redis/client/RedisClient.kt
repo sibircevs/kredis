@@ -16,11 +16,8 @@ import java.io.IOException
  * @param db
  * @param passwd
  */
-class RedisClient(val host: String, val port: Int, val db: Int, val passwd: String) {
+class RedisClient(val host: String, val port: Int = 6379, val db: Int = 0, val passwd: String = "") {
     lateinit var redisProtocol: RedisProtocol
-
-    constructor(host: String, port: Int, db: Int) : this(host, port, db, "")
-    constructor(host: String, port: Int) : this(host, port, 0, "")
 
     @Throws(RedisException::class)
     fun connect(): Boolean {
@@ -38,7 +35,6 @@ class RedisClient(val host: String, val port: Int, val db: Int, val passwd: Stri
     }
     
     @Throws(RedisException::class)
-    //fun execute(command: Command): Reply {
     fun execute(block: () -> Command): Reply {
         val command = block()
         val executeReply: Reply = try {
@@ -54,9 +50,13 @@ class RedisClient(val host: String, val port: Int, val db: Int, val passwd: Stri
         return executeReply
     }
     
-    @Throws(IOException::class)
+    @Throws(RedisException::class)
     fun close() {
-        redisProtocol.close()
+        try {
+            redisProtocol.close()
+        } catch (e: IOException) {
+            throw RedisException("Could not close connect", e)
+        }
     }
 }
 

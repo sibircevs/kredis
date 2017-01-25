@@ -11,6 +11,8 @@ enum class ReplyType {
  * 
  * User: sibircevs
  * Date: 04.01.2017
+ * @param bytes
+ * @param type
  */
 open class Reply(val bytes: ByteArray, val type: ReplyType)
 
@@ -19,6 +21,7 @@ open class Reply(val bytes: ByteArray, val type: ReplyType)
  * 
  * User: sibircevs
  * Date: 04.01.2017
+ * @param bytes
  */
 class StatusReply(bytes: ByteArray) : Reply(bytes, ReplyType.STATUS) {
     companion object {
@@ -36,6 +39,7 @@ class StatusReply(bytes: ByteArray) : Reply(bytes, ReplyType.STATUS) {
  * 
  * User: sibircevs
  * Date: 04.01.2017
+ * @param bytes
  */
 class ErrorReply(bytes: ByteArray) : Reply(bytes, ReplyType.ERROR) {
     companion object {
@@ -53,6 +57,7 @@ class ErrorReply(bytes: ByteArray) : Reply(bytes, ReplyType.ERROR) {
  * 
  * User: sibircevs
  * Date: 04.01.2017
+ * @param bytes
  */
 class IntegerReply(bytes: ByteArray) : Reply(bytes, ReplyType.INT) {
     companion object {
@@ -74,6 +79,7 @@ class IntegerReply(bytes: ByteArray) : Reply(bytes, ReplyType.INT) {
  * 
  * User: sibircevs
  * Date: 04.01.2017
+ * @param bytes
  */
 open class BulkReply(bytes: ByteArray) : Reply(bytes, ReplyType.BULK) {
     companion object {
@@ -102,6 +108,7 @@ class NullBulkString() : BulkReply(byteArrayOf()) {
  * 
  * User: sibircevs
  * Date: 04.01.2017
+ * @param replies
  */
 class MultiBulkReply(replies: List<Reply>) : Reply(byteArrayOf(), ReplyType.MULTIBULK) {
     companion object {

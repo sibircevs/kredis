@@ -63,23 +63,23 @@ class RedisProtocol(bis: BufferedInputStream, os: OutputStream) {
         }
         when (code) {
             StatusReply.MARKER.toInt() -> {
-                return StatusReply(readSimpleElement())
+                return StatusReply(readSimpleReply())
             }
             ErrorReply.MARKER.toInt() -> {
-                return ErrorReply(readSimpleElement())
+                return ErrorReply(readSimpleReply())
             }
             IntegerReply.MARKER.toInt() -> {
-                return IntegerReply(readSimpleElement())
+                return IntegerReply(readSimpleReply())
             }
             BulkReply.MARKER.toInt() -> {
-                val (size, bytes) = readBytes()
+                val (size, bytes) = readBulkReply()
                 if (size == -1)
                     return NullBulkString()
                 else
                     return BulkReply(bytes)
             }
             MultiBulkReply.MARKER.toInt() -> {
-                val size = String(readSimpleElement()).toInt()
+                val size = String(readSimpleReply()).toInt()
                 val replies: List<Reply> = (1..size).map { receive() }.toList()
                 return MultiBulkReply(replies)
             }
@@ -92,43 +92,25 @@ class RedisProtocol(bis: BufferedInputStream, os: OutputStream) {
     }
     
     @Throws(IOException::class)
-    private fun readSimpleElement(): ByteArray = ByteArrayOutputStream().use { boas ->
-        for (b: Byte in _is) {
-            if (b == CR) {
-                val lf = _is.iterator().next() // Remove byte LF from stream
-                if (lf == LF)
-                    break
-                else
-                    throw IOException("String that cannot contain a CR or LF character (no newlines are allowed).")
-            } else {
-                boas.write(b.toInt())
+    private fun readSimpleReply(): ByteArray =
+        ByteArrayOutputStream().use { baos ->
+            for (b: Byte in _is) {
+                if (b == CR) {
+                    val lf = _is.iterator().next() // Remove byte LF from stream
+                    if (lf == LF)
+                        break
+                    else
+                        throw IOException("String that cannot contain a CR or LF character (no newlines are allowed).")
+                } else {
+                    baos.write(b.toInt())
+                }
             }
+            baos.toByteArray()
         }
-        boas.toByteArray()
-    }
-    /*
-    private fun readSimpleElement(): ByteArray {
-        val baos = ByteArrayOutputStream()
-        for (b: Byte in _is) {
-            if (b == CR) {
-                val lf = _is.iterator().next() // Remove byte LF from stream
-                if (lf == LF)
-                    break
-                else
-                    throw IOException("String that cannot contain a CR or LF character (no newlines are allowed).")
-            } else {
-                baos.write(b.toInt())
-            }
-        }
-        val bytes = baos.toByteArray()
-        baos.close()
-        return bytes
-    }
-    */
     
     @Throws(IOException::class, NumberFormatException::class, IllegalArgumentException::class)
-    private fun readBytes(): Pair<Int, ByteArray> {
-        val size = String(readSimpleElement()).toInt()
+    private fun readBulkReply(): Pair<Int, ByteArray> {
+        val size = String(readSimpleReply()).toInt()
 
         if (size > Integer.MAX_VALUE - 8) {
             throw IllegalArgumentException("Supports arrays up to ${Integer.MAX_VALUE -8 } in size")
@@ -138,16 +120,17 @@ class RedisProtocol(bis: BufferedInputStream, os: OutputStream) {
         if (size < 0)
             throw IllegalArgumentException("Invalid size: " + size)
 
-        var total = 0
-        val baos = ByteArrayOutputStream()
-        if (size > 0) // For correct "$0\r\n\r\n" processing
-            for (b: Byte in _is) {
-                baos.write(b.toInt())
-                total += 1
-                if (total == size) break
-            }
-        val bytes = baos.toByteArray()
-        baos.close()
+        val bytes = ByteArrayOutputStream().use { baos ->
+            var total = 0
+            if (size > 0) // For correct "$0\r\n\r\n" processing
+                for (b: Byte in _is) {
+                    baos.write(b.toInt())
+                    total += 1
+                    if (total == size) break
+                }
+            baos.toByteArray()
+        }
+        
         val cr: Int = _is.read()
         val lf: Int = _is.read()
         if (bytes.size != size) {

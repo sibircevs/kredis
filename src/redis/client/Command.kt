@@ -10,6 +10,18 @@ enum class InsertType {
     BEFORE, AFTER
 }
 
+enum class SetOptions {
+    NONE, NX, XX
+}
+
+enum class ScriptDebugMode {
+    YES, SYNC, NO
+}
+
+enum class ShutdownOptions {
+    NOSAVE, SAVE
+}
+
 private fun ByteArrayOutputStream.writeAsBulkString(bytes: ByteArray) {
     val size: Int = bytes.size
     val strSize: String = size.toString()
@@ -21,6 +33,14 @@ private fun ByteArrayOutputStream.writeAsBulkString(bytes: ByteArray) {
 }
 
 private fun ByteArrayOutputStream.writeAsBulkString(value: Int) {
+    this.writeAsBulkString(value.toString().toByteArray(Charsets.UTF_8))
+}
+
+private fun ByteArrayOutputStream.writeAsBulkString(value: Long) {
+    this.writeAsBulkString(value.toString().toByteArray(Charsets.UTF_8))
+}
+
+private fun ByteArrayOutputStream.writeAsBulkString(value: Float) {
     this.writeAsBulkString(value.toString().toByteArray(Charsets.UTF_8))
 }
 
@@ -37,41 +57,61 @@ private fun ByteArrayOutputStream.writeAsArrayStart(arraySize: Int) {
     this.write(RedisProtocol.NEWLINE, 0, 2)
 }
 
-private fun singleCommand(cmdName: String): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 1 // komanda
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(cmdName)
-        baos.toByteArray()
-    }
-    return Command(cmdName, cmd)
-}
+private fun singleCommand(cmdName: String): Command =
+    Command(cmdName, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 1 // komanda
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(cmdName)
+            baos.toByteArray()
+        }
+    )
 
-private fun oneParamCommand(cmdName: String, param: ByteArray): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 2 // komanda + param
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(cmdName)
-        baos.writeAsBulkString(param)
-        baos.toByteArray()
-    }
-    return Command(cmdName, cmd)
-}
+private fun oneParamCommand(cmdName: String, param: ByteArray): Command =
+    Command(cmdName, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 2 // komanda + param
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(cmdName)
+            baos.writeAsBulkString(param)
+            baos.toByteArray()
+        }
+    )
 
-private fun twoParamCommand(cmdName: String, param1: ByteArray, param2: ByteArray): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 3 // komanda + param
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(cmdName)
-        baos.writeAsBulkString(param1)
-        baos.writeAsBulkString(param2)
-        baos.toByteArray()
-    }
-    return Command(cmdName, cmd)
-}
+private fun twoParamCommand(cmdName: String, param1: ByteArray, param2: ByteArray): Command =
+    Command(cmdName, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 3 // komanda + param
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(cmdName)
+            baos.writeAsBulkString(param1)
+            baos.writeAsBulkString(param2)
+            baos.toByteArray()
+        }
+    )
+
+private fun varargParamCommand(cmdName: String, vararg param: String): Command =
+    Command(cmdName, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 1 + param.size // komanda + param.size
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(cmdName)
+            baos.writeAsBulkString(*param)
+            baos.toByteArray()
+        }
+    )
+    
+private fun keyAndVarargParamCommand(cmdName: String, key: ByteArray, vararg param1: String): Command =
+    Command(cmdName, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 2 + param1.size // komanda + key + param1.size
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(cmdName)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(*param1)
+            baos.toByteArray()
+        }
+    )
 
 /**
  * APPEND key value
@@ -91,6 +131,276 @@ public fun cmdAppend(key: ByteArray, value: ByteArray): Command = twoParamComman
 public fun cmdAuth(password0: String): Command = oneParamCommand(Command.AUTH, password0.toByteArray(Charsets.UTF_8))
 
 /**
+ * BGREWRITEAOF
+ * Available since 1.0.0.
+ * Return value
+ *  Simple string reply: always OK.
+ */
+public fun cmdBGReWriteAOf(): Command = singleCommand(Command.BGREWRITEAOF)
+
+/**
+ * BGSAVE
+ * Available since 1.0.0.
+ * Return value
+ *  Simple string reply
+ */
+public fun cmdBGSave(): Command = singleCommand(Command.BGSAVE)
+
+/**
+ * BITCOUNT key [start end] 
+ * Available since 2.6.0.
+ * ! Is not implemented
+ */
+
+/**
+ * BITFIELD key [GET type offset] [SET type offset value] [INCRBY type offset increment] [OVERFLOW WRAP|SAT|FAIL] 
+ * Available since 3.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * BITOP operation destkey key [key ...] 
+ * Available since 2.6.0.
+ * ! Is not implemented
+ */
+
+/**
+ * BITPOS key bit [start] [end] 
+ * Available since 2.8.7.
+ * ! Is not implemented
+ */
+
+/**
+ * BLPOP key [key ...] timeout 
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * BRPOP key [key ...] timeout 
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * BRPOPLPUSH source destination timeout 
+ * Available since 2.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLIENT GETNAME
+ * Available since 2.6.9.
+ * Return value
+ *  Bulk string reply: The connection name, or a null bulk reply if no name is set.
+ */
+public fun cmdClientGetName(): Command = singleCommand(Command.CLIENT_GETNAME)
+
+/**
+ * CLIENT KILL [ip:port] [ID client-id] [TYPE normal|master|slave|pubsub] [ADDR ip:port] [SKIPME yes/no] 
+ * Available since 2.4.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLIENT LIST
+ * Available since 2.4.0.
+ * Return value
+ *  Bulk string reply: a unique string, formatted as follows:
+ *   One client connection per line (separated by LF)
+ *   Each line is composed of a succession of property=value fields separated by a space character.
+ */
+public fun cmdClientList(): Command = singleCommand(Command.CLIENT_LIST)
+
+/**
+ * CLIENT PAUSE timeout 
+ * Available since 2.9.50.
+ * ! Is not implemented
+ */
+
+/** 
+ * CLIENT REPLY ON|OFF|SKIP 
+ * Available since 3.2.
+ * ! Is not implemented
+ */
+ 
+/**
+ * CLIENT SETNAME connection-name
+ * Available since 2.6.9.
+ * Return value
+ *  Simple string reply: OK if the connection name was successfully set.
+ */
+public fun cmdClientSetName(name: String): Command = oneParamCommand(Command.CLIENT_SETNAME, name.toByteArray(Charsets.UTF_8))
+
+/**
+ * CLUSTER ADDSLOTS slot [slot ...] 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER COUNT-FAILURE-REPORTS node-id 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER COUNTKEYSINSLOT slot 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER DELSLOTS slot [slot ...] 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER FAILOVER [FORCE|TAKEOVER] 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER FORGET node-id 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER GETKEYSINSLOT slot count 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER INFO
+ * Available since 3.0.0.
+ * Return value
+ *  Bulk string reply: A map between named fields and values in the form of <field>:<value> lines separated by newlines composed by the two bytes CRLF.
+ */
+public fun cmdClusterInfo(): Command = singleCommand(Command.CLUSTER_INFO)
+
+/**
+ * CLUSTER KEYSLOT key
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER MEET ip port
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER NODES
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER REPLICATE node-id 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER RESET [HARD|SOFT] 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER SAVECONFIG
+ * Available since 3.0.0.
+ * Return value
+ *  Simple string reply: OK or an error if the operation fails.
+ */
+public fun cmdClusterSaveConfig(): Command = singleCommand(Command.CLUSTER_SAVECONFIG)
+
+/**
+ * CLUSTER SET-CONFIG-EPOCH config-epoch 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER SETSLOT slot IMPORTING|MIGRATING|STABLE|NODE [node-id] 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER SLAVES node-id 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CLUSTER SLOTS
+ * Available since 3.0.0.
+ * Return value
+ *  Array reply: nested list of slot ranges with IP/Port mappings.
+ */
+public fun cmdClusterSlots(): Command = singleCommand(Command.CLUSTER_SLOTS)
+
+/**
+ * COMMAND
+ * Available since 2.8.13.
+ * ! Is not implemented
+ */
+
+/**
+ * COMMAND COUNT
+ * Available since 2.8.13.
+ * Return value
+ *  Integer reply: number of commands returned by COMMAND
+ */
+public fun cmdCommandCount(): Command = singleCommand(Command.COMMAND_COUNT)
+
+/**
+ * COMMAND GETKEYS
+ * Available since 2.8.13.
+ * ! Is not implemented
+ */
+
+/**
+ * COMMAND INFO command-name [command-name ...] 
+ * Available since 2.8.13.
+ * ! Is not implemented
+ */
+
+/**
+ * CONFIG GET parameter 
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * CONFIG RESETSTAT
+ * Available since 2.0.0.
+ * Return value
+ *  Simple string reply: always OK.
+ */
+public fun cmdConfigResetStat(): Command = singleCommand(Command.CONFIG_RESETSTAT)
+
+/**
+ * CONFIG REWRITE
+ * Available since 2.8.0.
+ * Return value
+ *  Simple string reply: OK when the configuration was rewritten properly. Otherwise an error is returned.
+ */
+public fun cmdConfigReWrite(): Command = singleCommand(Command.CONFIG_REWRITE)
+
+/**
+ * CONFIG SET parameter value 
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
+ 
+/**
  * DBSIZE
  * Available since 1.0.0.
  * Return value
@@ -99,23 +409,61 @@ public fun cmdAuth(password0: String): Command = oneParamCommand(Command.AUTH, p
 public fun cmdDBSize(): Command = singleCommand(Command.DBSIZE)
 
 /**
+ * DEBUG OBJECT key 
+ * Available since 1.0.0.
+ * DEBUG OBJECT is a debugging command that should not be used by clients. 
+ * ! Is not implemented
+ */
+
+/**
+ * DEBUG SEGFAULT
+ * Available since 1.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * DECR key 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: the value of key after the decrement
+ */
+public fun cmdDecr(key: String): Command = cmdIncr(key.toByteArray(Charsets.UTF_8))
+public fun cmdDecr(key: ByteArray): Command = oneParamCommand(Command.DECR, key)
+
+/**
+ * DECRBY key decrement 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: the value of key after the decrement
+ */
+public fun cmdDecrBy(key: String, decrement : Int): Command = cmdDecrBy(key.toByteArray(Charsets.UTF_8), decrement )
+public fun cmdDecrBy(key: ByteArray, decrement : Int): Command = twoParamCommand(Command.DECRBY, key, decrement .toString().toByteArray(Charsets.UTF_8))
+
+/**
  * DEL key [key ...]
  * Available since 1.0.0.
  * Return value:
  *  Integer reply: The number of keys that were removed.
  */
 public fun cmdDel(key: ByteArray): Command = oneParamCommand(Command.DEL, key)
-public fun cmdDel(vararg keys: String): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 1 + keys.size // komanda + keys.size
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.DEL)
-        baos.writeAsBulkString(*keys)
-        baos.toByteArray()
-    }
-    return Command(Command.DEL, cmd)
-}
+public fun cmdDel(vararg key: String): Command = varargParamCommand(Command.DEL, *key)
+
+/**
+ * DISCARD
+ * Available since 2.0.0.
+ * Return value
+ *  Simple string reply: always OK.
+ */
+public fun cmdDiscard(): Command = singleCommand(Command.DISCARD)
+
+/**
+ * DUMP key 
+ * Available since 2.6.0.
+ * Return value
+ *  Bulk string reply: the serialized value.
+ */
+public fun cmdDump(key: String): Command = cmdDump(key.toByteArray(Charsets.UTF_8))
+public fun cmdDump(key: ByteArray): Command = oneParamCommand(Command.DUMP, key)
 
 /**
  * ECHO message
@@ -126,6 +474,27 @@ public fun cmdDel(vararg keys: String): Command {
 public fun cmdEcho(msg: String): Command = oneParamCommand(Command.ECHO, msg.toByteArray(Charsets.UTF_8))
 
 /**
+ * EVAL script numkeys key [key ...] arg [arg ...] 
+ * Available since 2.6.0.
+ * ! Is not implemented
+ */
+
+/**
+ * EVALSHA sha1 numkeys key [key ...] arg [arg ...] 
+ * Available since 2.6.0.
+ * ! Is not implemented
+ */
+
+/**
+ * EXEC
+ * Available since 1.2.0.
+ * Return value
+ *  Array reply: each element being the reply to each of the commands in the atomic transaction.
+ *  When using WATCH, EXEC can return a Null reply if the execution was aborted.
+ */
+public fun cmdExec(): Command = singleCommand(Command.EXEC)
+
+/**
  * EXISTS key [key ...]
  * Available since 1.0.0.
  * Return value
@@ -134,17 +503,362 @@ public fun cmdEcho(msg: String): Command = oneParamCommand(Command.ECHO, msg.toB
  *  0 if the key does not exist.
  */
 public fun cmdExists(key: ByteArray): Command = oneParamCommand(Command.EXISTS, key)
-public fun cmdExists(vararg keys: String): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 1 + keys.size // komanda + keys.size
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.EXISTS)
-        baos.writeAsBulkString(*keys)
-        baos.toByteArray()
-    }
-    return Command(Command.EXISTS, cmd)
-}
+public fun cmdExists(vararg key: String): Command = varargParamCommand(Command.EXISTS, *key)
+
+/**
+ * EXPIRE key seconds 
+ * Available since 1.0.0.
+ * ! Is not implemented
+ */
+ 
+/**
+ * EXPIREAT key timestamp 
+ * Available since 1.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * FLUSHALL [ASYNC] 
+ * Available since 1.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * FLUSHDB [ASYNC] 
+ * Available since 1.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * GEOADD key longitude latitude member [longitude latitude member ...] 
+ * Available since 3.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * GEODIST key member1 member2 [unit] 
+ * Available since 3.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * GEOHASH key member [member ...] 
+ * Available since 3.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * GEOPOS key member [member ...] 
+ * Available since 3.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * GEORADIUS key longitude latitude radius m|km|ft|mi [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count] [ASC|DESC] [STORE key] [STOREDIST key] 
+ * Available since 3.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * GEORADIUSBYMEMBER key member radius m|km|ft|mi [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count] [ASC|DESC] [STORE key] [STOREDIST key] 
+ * Available since 3.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * GET key 
+ * Available since 1.0.0.
+ * Return value
+ *  Bulk string reply: the value of key, or nil when key does not exist.
+ */
+public fun cmdGet(key: String): Command = cmdGet(key.toByteArray(Charsets.UTF_8))
+public fun cmdGet(key: ByteArray): Command = oneParamCommand(Command.GET, key)
+ 
+/**
+ * GETBIT key offset 
+ * Available since 2.2.0.
+ * ! Is not implemented
+ */
+
+/** 
+ * GETRANGE key start end 
+ * Available since 2.4.0.
+ * Return value
+ *  Bulk string reply
+ */
+public fun cmdGetRange(key: String, start: Int, end: Int): Command = cmdGetRange(key.toByteArray(Charsets.UTF_8), start, end)
+public fun cmdGetRange(key: ByteArray, start: Int, end: Int): Command =
+    Command(Command.GETRANGE,
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // komanda + key + start + end
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.GETRANGE)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(start)
+            baos.writeAsBulkString(end)
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * GETSET key value 
+ * Available since 1.0.0.
+ * Return value
+ *  Bulk string reply: the old value stored at key, or nil when key did not exist.
+ */
+public fun cmdGetSet(key: String, value: String): Command = cmdGetSet(key.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
+public fun cmdGetSet(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.GETSET, key, value)
+
+/**
+ * HDEL key field [field ...] 
+ * Available since 2.0.0.
+ * Return value
+ * Integer reply: the number of fields that were removed from the hash, not including specified but non existing fields.
+ */
+public fun cmdHDel(key: String, field: ByteArray): Command = cmdHDel(key.toByteArray(Charsets.UTF_8), field)
+public fun cmdHDel(key: String, vararg field: String): Command = cmdHDel(key.toByteArray(Charsets.UTF_8), *field)
+public fun cmdHDel(key: ByteArray, field: ByteArray): Command = twoParamCommand(Command.HDEL, key, field)
+public fun cmdHDel(key: ByteArray, vararg field: String): Command = keyAndVarargParamCommand(Command.HDEL, key, *field)
+
+/**
+ * HEXISTS key field 
+ * Available since 2.0.0.
+ * Return value
+ *  Integer reply, specifically:
+ *   1 if the hash contains field.
+ *   0 if the hash does not contain field, or key does not exist.
+ */
+public fun cmdHExists(key: String, field: String): Command = cmdHExists(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8))
+public fun cmdHExists(key: ByteArray, field: ByteArray): Command = twoParamCommand(Command.HEXISTS, key, field)
+
+/**
+ * HGET key field 
+ * Available since 2.0.0.
+ * Return value
+ *  Bulk string reply: the value associated with field, or nil when field is not present in the hash or key does not exist.
+ */
+public fun cmdHGet(key: String, field: String): Command = cmdHGet(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8))
+public fun cmdHGet(key: ByteArray, field: ByteArray): Command = twoParamCommand(Command.HGET, key, field)
+
+/**
+ * HGETALL key 
+ * Available since 2.0.0.
+ * Return value
+ *  Array reply: list of fields and their values stored in the hash, or an empty list when key does not exist.
+ */
+public fun cmdHGetAll(key: String): Command = cmdHGetAll(key.toByteArray(Charsets.UTF_8))
+public fun cmdHGetAll(key: ByteArray): Command = oneParamCommand(Command.HGETALL, key)
+
+/**
+ * HINCRBY key field increment 
+ * Available since 2.0.0.
+ * Return value
+ *  Integer reply: the value at field after the increment operation.
+ */
+public fun cmdHIncrBy(key: String, field: String, increment: Int): Command = cmdHIncrBy(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8), increment)
+public fun cmdHIncrBy(key: ByteArray, field: ByteArray, increment: Int): Command =
+    Command(Command.HINCRBY,
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // komanda + key + field + increment
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.HINCRBY)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(field)
+            baos.writeAsBulkString(increment)
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * HINCRBYFLOAT key field increment 
+ * Available since 2.6.0.
+ * Return value
+ *  Bulk string reply: the value of field after the increment.
+ */
+public fun cmdHIncrByFloat(key: String, field: String, increment: Float): Command = cmdHIncrByFloat(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8), increment)
+public fun cmdHIncrByFloat(key: ByteArray, field: ByteArray, increment: Float): Command =
+    Command(Command.HINCRBYFLOAT,
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // komanda + key + field + increment
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.HINCRBYFLOAT)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(field)
+            baos.writeAsBulkString(increment)
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * HKEYS key 
+ * Available since 2.0.0.
+ * Return value
+ *  Array reply: list of fields in the hash, or an empty list when key does not exist.
+ */
+public fun cmdHKeys(key: String): Command = cmdHKeys(key.toByteArray(Charsets.UTF_8))
+public fun cmdHKeys(key: ByteArray): Command = oneParamCommand(Command.HKEYS, key)
+
+/**
+ * HLEN key 
+ * Available since 2.0.0.
+ * Return value
+ *  Integer reply: number of fields in the hash, or 0 when key does not exist.
+ */
+public fun cmdHLen(key: String): Command = cmdHLen(key.toByteArray(Charsets.UTF_8))
+public fun cmdHLen(key: ByteArray): Command = oneParamCommand(Command.HLEN, key)
+
+/**
+ * HMGET key field [field ...] 
+ * Available since 2.0.0.
+ * Return value
+ *  Array reply: list of values associated with the given fields, in the same order as they are requested.
+ */
+public fun cmdHMGet(key: String, field: ByteArray): Command = cmdHMGet(key.toByteArray(Charsets.UTF_8), field)
+public fun cmdHMGet(key: String, vararg field: String): Command = cmdHMGet(key.toByteArray(Charsets.UTF_8), *field)
+public fun cmdHMGet(key: ByteArray, field: ByteArray): Command = twoParamCommand(Command.HMGET, key, field)
+public fun cmdHMGet(key: ByteArray, vararg field: String): Command = keyAndVarargParamCommand(Command.HMGET, key, *field)
+
+/**
+ * HMSET key field value [field value ...] 
+ * Available since 2.0.0.
+ * Return value
+ *  Simple string reply
+ */
+public fun cmdHMSet(key: String, data: Map<String, String>): Command = cmdHMSet(key.toByteArray(Charsets.UTF_8), data)
+public fun cmdHMSet(key: ByteArray, data: Map<String, String>): Command =
+    Command(Command.HMSET,
+        ByteArrayOutputStream().use { baos ->
+            val size = 2 + data.size * 2 // komanda + key + (field + value) * data.size
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.HMSET)
+            baos.writeAsBulkString(key)
+            for ((field, value) in data) {
+                baos.writeAsBulkString(field)
+                baos.writeAsBulkString(value)
+            }
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * HSCAN key cursor [MATCH pattern] [COUNT count] 
+ * Available since 2.8.0.
+ * ! Is not implemented
+ */
+
+/**
+ * HSET key field value 
+ * Available since 2.0.0.
+ * Return value
+ *  Integer reply, specifically:
+ *   1 if field is a new field in the hash and value was set.
+ *   0 if field already exists in the hash and the value was updated.
+ */
+public fun cmdHSet(key: String, field: String, value: String): Command = cmdHSet(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
+public fun cmdHSet(key: ByteArray, field: ByteArray, value: ByteArray): Command =
+    Command(Command.HSET, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // command + key + field + value
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.HSET)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(field)
+            baos.writeAsBulkString(value)
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * HSETNX key field value 
+ * Available since 2.0.0.
+ * Return value
+ *  Integer reply, specifically:
+ *   1 if field is a new field in the hash and value was set.
+ *   0 if field already exists in the hash and no operation was performed.
+ */
+public fun cmdHSetNX(key: String, field: String, value: String): Command = cmdHSetNX(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
+public fun cmdHSetNX(key: ByteArray, field: ByteArray, value: ByteArray): Command =
+    Command(Command.HSETNX, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // command + key + field + value
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.HSETNX)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(field)
+            baos.writeAsBulkString(value)
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * HSTRLEN key field 
+ * Available since 3.2.0.
+ * Return value
+ *  Integer reply: the string length of the value associated with field, or zero when field is not present in the hash or key does not exist at all.
+ */
+public fun cmdHStrLen(key: String, field: String): Command = cmdHStrLen(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8))
+public fun cmdHStrLen(key: ByteArray, field: ByteArray): Command = twoParamCommand(Command.HSTRLEN, key, field)
+
+/**
+ * HVALS key 
+ * Available since 2.0.0.
+ * Return value
+ *  Array reply: list of values in the hash, or an empty list when key does not exist.
+ */
+public fun cmdHVals(key: String): Command = cmdHVals(key.toByteArray(Charsets.UTF_8))
+public fun cmdHVals(key: ByteArray): Command = oneParamCommand(Command.HVALS, key)
+
+/**
+ * INCR key 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: the value of key after the increment
+ */
+public fun cmdIncr(key: String): Command = cmdIncr(key.toByteArray(Charsets.UTF_8))
+public fun cmdIncr(key: ByteArray): Command = oneParamCommand(Command.INCR, key)
+
+/**
+ * INCRBY key increment 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: the value of key after the increment
+ */
+public fun cmdIncrBy(key: String, increment: Int): Command = cmdIncrBy(key.toByteArray(Charsets.UTF_8), increment)
+public fun cmdIncrBy(key: ByteArray, increment: Int): Command = twoParamCommand(Command.INCRBY, key, increment.toString().toByteArray(Charsets.UTF_8))
+
+/**
+ * INCRBYFLOAT key increment 
+ * Available since 2.6.0.
+ * Return value
+ *  Bulk string reply: the value of key after the increment.
+ */
+public fun cmdIncrByFloat(key: String, increment: Float): Command = cmdIncrByFloat(key.toByteArray(Charsets.UTF_8), increment)
+public fun cmdIncrByFloat(key: ByteArray, increment: Float): Command = twoParamCommand(Command.INCRBYFLOAT, key, increment.toString().toByteArray(Charsets.UTF_8))
+
+/**
+ * INFO [section] 
+ * Available since 1.0.0.
+ * Return value
+ *  Bulk string reply: as a collection of text lines.
+ *  Lines can contain a section name (starting with a # character) or a property. All the properties are in the form of field:value terminated by \r\n.
+ */
+public fun cmdInfo(section: String = ""): Command = if (section == "") singleCommand(Command.INFO) else oneParamCommand(Command.INFO, section.toByteArray(Charsets.UTF_8))
+
+/**
+ * KEYS pattern 
+ * Available since 1.0.0.
+ * Return value
+ *  Array reply: list of keys matching pattern.
+ */
+public fun cmdKeys(pattern: String): Command = oneParamCommand(Command.KEYS, pattern.toByteArray(Charsets.UTF_8))
+
+/**
+ * LASTSAVE
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: an UNIX time stamp.
+ */
+public fun cmdLastSave(): Command = singleCommand(Command.LASTSAVE)
 
 /**
  * LINDEX key index
@@ -195,7 +909,7 @@ public fun cmdLLen(key: ByteArray): Command = oneParamCommand(Command.LLEN, key)
  * Return value
  *  Bulk string reply
  */
-public fun cmdLPop(key: String): Command = oneParamCommand(Command.LPOP, key.toByteArray(Charsets.UTF_8))
+public fun cmdLPop(key: String): Command = cmdLPop(key.toByteArray(Charsets.UTF_8))
 public fun cmdLPop(key: ByteArray): Command = oneParamCommand(Command.LPOP, key)
 
 /**
@@ -206,30 +920,8 @@ public fun cmdLPop(key: ByteArray): Command = oneParamCommand(Command.LPOP, key)
  */
 public fun cmdLPush(key: String, value: ByteArray): Command = cmdLPush(key.toByteArray(Charsets.UTF_8), value)
 public fun cmdLPush(key: String, vararg values: String): Command = cmdLPush(key.toByteArray(Charsets.UTF_8), *values)
-public fun cmdLPush(key: ByteArray, value: ByteArray): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 3 // komanda + key + value
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.LPUSH)
-        baos.writeAsBulkString(key)
-        baos.writeAsBulkString(value)
-        baos.toByteArray()
-    }
-    return Command(Command.LPUSH, cmd)
-}
-public fun cmdLPush(key: ByteArray, vararg values: String): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 2 + values.size // komanda + key + values.size
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.LPUSH)
-        baos.writeAsBulkString(key)
-        baos.writeAsBulkString(*values)
-        baos.toByteArray()
-    }
-    return Command(Command.LPUSH, cmd)
-}
+public fun cmdLPush(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.LPUSH, key, value)
+public fun cmdLPush(key: ByteArray, vararg value: String): Command = keyAndVarargParamCommand(Command.LPUSH, key, *value)
 
 /**
  * LPUSHX key value
@@ -249,19 +941,18 @@ public fun cmdLPushX(key: ByteArray, value: ByteArray): Command = twoParamComman
  *  Array reply: list of elements in the specified range.
  */
 public fun cmdLRange(key: String, start: Int, stop: Int): Command = cmdLRange(key.toByteArray(Charsets.UTF_8), start, stop)
-public fun cmdLRange(key: ByteArray, start: Int, stop: Int): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 4 // komanda + key + start + stop
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.LRANGE)
-        baos.writeAsBulkString(key)
-        baos.writeAsBulkString(start)
-        baos.writeAsBulkString(stop)
-        baos.toByteArray()
-    }
-    return Command(Command.LRANGE, cmd)
-}
+public fun cmdLRange(key: ByteArray, start: Int, stop: Int): Command =
+    Command(Command.LRANGE,
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // komanda + key + start + stop
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.LRANGE)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(start)
+            baos.writeAsBulkString(stop)
+            baos.toByteArray()
+        }
+    )
 
 /**
  * LREM key count value
@@ -271,19 +962,18 @@ public fun cmdLRange(key: ByteArray, start: Int, stop: Int): Command {
  */
 public fun cmdLRem(key: String, count: Int, value: String): Command = cmdLRem(key.toByteArray(Charsets.UTF_8), count, value.toByteArray(Charsets.UTF_8))
 public fun cmdLRem(key: ByteArray, count: Int, value: String): Command = cmdLRem(key, count, value.toByteArray(Charsets.UTF_8))
-public fun cmdLRem(key: ByteArray, count: Int, value: ByteArray): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 4 // komanda + key + count + value
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.LREM)
-        baos.writeAsBulkString(key)
-        baos.writeAsBulkString(count)
-        baos.writeAsBulkString(value)
-        baos.toByteArray()
-    }
-    return Command(Command.LREM, cmd)
-}
+public fun cmdLRem(key: ByteArray, count: Int, value: ByteArray): Command =
+    Command(Command.LREM,
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // komanda + key + count + value
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.LREM)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(count)
+            baos.writeAsBulkString(value)
+            baos.toByteArray()
+        }
+    )
 
 /**
  * LSET key index value 
@@ -293,19 +983,18 @@ public fun cmdLRem(key: ByteArray, count: Int, value: ByteArray): Command {
  */
 public fun cmdLSet(key: String, index: Int, value: String): Command = cmdLSet(key.toByteArray(Charsets.UTF_8), index, value.toByteArray(Charsets.UTF_8))
 public fun cmdLSet(key: ByteArray, index: Int, value: String): Command = cmdLSet(key, index, value.toByteArray(Charsets.UTF_8))
-public fun cmdLSet(key: ByteArray, index: Int, value: ByteArray): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 4 // komanda + key + index + value
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.LSET)
-        baos.writeAsBulkString(key)
-        baos.writeAsBulkString(index)
-        baos.writeAsBulkString(value)
-        baos.toByteArray()
-    }
-    return Command(Command.LSET, cmd)
-}
+public fun cmdLSet(key: ByteArray, index: Int, value: ByteArray): Command = 
+    Command(Command.LSET,
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // komanda + key + index + value
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.LSET)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(index)
+            baos.writeAsBulkString(value)
+            baos.toByteArray()
+        }
+    )
 
 /**
  * LTRIM key start stop 
@@ -314,19 +1003,39 @@ public fun cmdLSet(key: ByteArray, index: Int, value: ByteArray): Command {
  *  Simple string reply
  */
 public fun cmdLTrim(key: String, start: Int, stop: Int): Command = cmdLTrim(key.toByteArray(Charsets.UTF_8), start, stop)
-public fun cmdLTrim(key: ByteArray, start: Int, stop: Int): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 4 // komanda + key + start + stop
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.LTRIM)
-        baos.writeAsBulkString(key)
-        baos.writeAsBulkString(start)
-        baos.writeAsBulkString(stop)
-        baos.toByteArray()
-    }
-    return Command(Command.LTRIM, cmd)
-}
+public fun cmdLTrim(key: ByteArray, start: Int, stop: Int): Command =
+    Command(Command.LTRIM, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // komanda + key + start + stop
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.LTRIM)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(start)
+            baos.writeAsBulkString(stop)
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * MGET key [key ...] 
+ * Available since 1.0.0.
+ * Return value
+ *  Array reply: list of values at the specified keys.
+ */
+public fun cmdMGet(key: ByteArray): Command = oneParamCommand(Command.MGET, key)
+public fun cmdMGet(vararg key: String): Command = varargParamCommand(Command.MGET, *key)
+     
+/**
+ * MIGRATE host port key|"" destination-db timeout [COPY] [REPLACE] [KEYS key [key ...]] 
+ * Available since 2.6.0.
+ * ! Is not implemented
+ */
+
+/**
+ * MONITOR
+ * Available since 1.0.0.
+ * ! Is not implemented
+ */
 
 /**
  * MOVE key db
@@ -336,18 +1045,115 @@ public fun cmdLTrim(key: ByteArray, start: Int, stop: Int): Command {
  *  1 if key was moved.
  *  0 if key was not moved.
  */
-public fun cmdMove(key: ByteArray, db: Int): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 3 // komanda + key + db
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.MOVE)
-        baos.writeAsBulkString(key)
-        baos.writeAsBulkString(db)
-        baos.toByteArray()
-    }
-    return Command(Command.MOVE, cmd)
-}
+public fun cmdMove(key: String, db: Int): Command = cmdMove(key.toByteArray(Charsets.UTF_8), db)
+public fun cmdMove(key: ByteArray, db: Int): Command = twoParamCommand(Command.MOVE, key, db.toString().toByteArray(Charsets.UTF_8))
+
+/**
+ * MSET key value [key value ...] 
+ * Available since 1.0.1.
+ * Return value
+ *  Simple string reply: always OK since MSET can't fail.
+ */
+public fun cmdMSet(data: Map<String, String>): Command =
+    Command(Command.MSET, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 1 + data.size * 2 // komanda + (key + value) * data.size
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.MSET)
+            for ((key, value) in data) {
+                baos.writeAsBulkString(key)
+                baos.writeAsBulkString(value)
+            }
+            baos.toByteArray()
+        }
+    )
+
+/**    
+ * MSETNX key value [key value ...] 
+ * Available since 1.0.1.
+ * Return value
+ *  Integer reply, specifically:
+ *   1 if the all the keys were set.
+ *   0 if no key was set (at least one key already existed).
+ */
+public fun cmdMSetNX(data: Map<String, String>): Command =
+    Command(Command.MSETNX, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 1 + data.size * 2 // komanda + (key + value) * data.size
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.MSETNX)
+            for ((key, value) in data) {
+                baos.writeAsBulkString(key)
+                baos.writeAsBulkString(value)
+            }
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * MULTI
+ * Available since 1.2.0.
+ * Return value
+ *  Simple string reply: always OK.
+ */
+public fun cmdMulti(): Command = singleCommand(Command.MULTI)
+
+/**
+ * OBJECT subcommand [arguments [arguments ...]] 
+ * Available since 2.2.3.
+ * ! Is not implemented
+ */
+
+/**
+ * PERSIST key 
+ * Available since 2.2.0.
+ * Return value
+ *  Integer reply, specifically:
+ *   1 if the timeout was removed.
+ *   0 if key does not exist or does not have an associated timeout.
+ */
+public fun cmdPersist(key: String): Command = cmdPersist(key.toByteArray(Charsets.UTF_8))
+public fun cmdPersist(key: ByteArray): Command = oneParamCommand(Command.PERSIST, key)
+
+/**
+ * PEXPIRE key milliseconds 
+ * Available since 2.6.0.
+ * ! Is not implemented
+ */
+
+/**
+ * PEXPIREAT key milliseconds-timestamp 
+ * Available since 2.6.0.
+ * ! Is not implemented
+ */
+
+/**
+ * PFADD key element [element ...] 
+ * Available since 2.8.9.
+ * Return value
+ *  Integer reply, specifically:
+ *  1 if at least 1 HyperLogLog internal register was altered. 0 otherwise.
+ */
+public fun cmdPFAdd(key: String, element: ByteArray): Command = cmdPFAdd(key.toByteArray(Charsets.UTF_8), element)
+public fun cmdPFAdd(key: String, vararg element: String): Command = cmdPFAdd(key.toByteArray(Charsets.UTF_8), *element)
+public fun cmdPFAdd(key: ByteArray, element: ByteArray): Command = twoParamCommand(Command.PFADD, key, element)
+public fun cmdPFAdd(key: ByteArray, vararg element: String): Command = keyAndVarargParamCommand(Command.PFADD, key, *element)
+
+/**
+ * PFCOUNT key [key ...] 
+ * Available since 2.8.9.
+ * Return value
+ *  Integer reply, specifically:
+ *  The approximated number of unique elements observed via PFADD.
+ */
+public fun cmdPFCount(vararg key: String): Command = varargParamCommand(Command.PFCOUNT, *key)
+public fun cmdPFCount(key: ByteArray): Command = oneParamCommand(Command.PFCOUNT, key)
+
+/**
+ * PFMERGE destkey sourcekey [sourcekey ...] 
+ * Available since 2.8.9.
+ * ! Is not implemented
+ */
 
 /**
  * PING [message]
@@ -357,6 +1163,58 @@ public fun cmdMove(key: ByteArray, db: Int): Command {
  */
 public fun cmdPing(): Command = singleCommand(Command.PING)
 public fun cmdPing(msg: String): Command = oneParamCommand(Command.PING, msg.toByteArray(Charsets.UTF_8))
+
+/**
+ * PSETEX key milliseconds value 
+ * Available since 2.6.0.
+ */
+public fun cmdPSetEX(key: String, milliseconds: Long, value: String): Command = cmdPSetEX(key.toByteArray(Charsets.UTF_8), milliseconds, value.toByteArray(Charsets.UTF_8))
+public fun cmdPSetEX(key: ByteArray, milliseconds: Long, value: ByteArray): Command =
+    Command(Command.PSETEX, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // command + key + milliseconds + value
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.PSETEX)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(milliseconds)
+            baos.writeAsBulkString(value)
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * PSUBSCRIBE pattern [pattern ...] 
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * PTTL key 
+ * Available since 2.6.0.
+ * Return value
+ *  Integer reply: TTL in milliseconds, or a negative value in order to signal an error .
+ */
+public fun cmdPTtl(key: String): Command = cmdPTtl(key.toByteArray(Charsets.UTF_8))
+public fun cmdPTtl(key: ByteArray): Command = oneParamCommand(Command.PTTL, key)
+
+/**
+ * PUBLISH channel message
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * PUBSUB subcommand [argument [argument ...]] 
+ * PUBSUB CHANNELS [pattern]
+ * Available since 2.8.0.
+ * ! Is not implemented
+ */
+
+/**
+ * PUNSUBSCRIBE [pattern [pattern ...]] 
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
 
 /**
  * QUIT
@@ -373,6 +1231,22 @@ public fun cmdQuit(): Command = singleCommand(Command.QUIT)
  *  Bulk string reply: the random key, or nil when the database is empty.
  */
 public fun cmdRandomKey(): Command = singleCommand(Command.RANDOMKEY)
+
+/**
+ * READONLY
+ * Available since 3.0.0.
+ * Return value
+ *  Simple string reply
+ */
+public fun cmdReadOnly(): Command = singleCommand(Command.READONLY)
+
+/**
+ * READWRITE
+ * Available since 3.0.0.
+ * Return value
+ *  Simple string reply
+ */
+public fun cmdReadWrite(): Command = singleCommand(Command.READWRITE)
 
 /**
  * RENAME key newkey
@@ -395,12 +1269,24 @@ public fun cmdRenameNx(key: String, newkey: String): Command = cmdRenameNx(key.t
 public fun cmdRenameNx(key: ByteArray, newkey: ByteArray): Command = twoParamCommand(Command.RENAMENX, key, newkey)
 
 /**
+ * RESTORE key ttl serialized-value [REPLACE] 
+ * Available since 2.6.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ROLE
+ * Available since 2.8.12.
+ * ! Is not implemented
+ */
+
+/**
  * RPOP key 
  * Available since 1.0.0.
  * Return value
  *  Bulk string reply: the value of the last element, or nil when key does not exist.
  */
-public fun cmdRPop(key: String): Command = oneParamCommand(Command.RPOP, key.toByteArray(Charsets.UTF_8))
+public fun cmdRPop(key: String): Command = cmdRPop(key.toByteArray(Charsets.UTF_8))
 public fun cmdRPop(key: ByteArray): Command = oneParamCommand(Command.RPOP, key)
 
 /**
@@ -420,30 +1306,8 @@ public fun cmdRPopLPush(source: ByteArray, destination: ByteArray): Command = tw
  */
 public fun cmdRPush(key: String, value: ByteArray): Command = cmdRPush(key.toByteArray(Charsets.UTF_8), value)
 public fun cmdRPush(key: String, vararg values: String): Command = cmdRPush(key.toByteArray(Charsets.UTF_8), *values)
-public fun cmdRPush(key: ByteArray, value: ByteArray): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 3 // komanda + key + value
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.RPUSH)
-        baos.writeAsBulkString(key)
-        baos.writeAsBulkString(value)
-        baos.toByteArray()
-    }
-    return Command(Command.RPUSH, cmd)
-}
-public fun cmdRPush(key: ByteArray, vararg values: String): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 2 + values.size // komanda + key + values.size
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.RPUSH)
-        baos.writeAsBulkString(key)
-        baos.writeAsBulkString(*values)
-        baos.toByteArray()
-    }
-    return Command(Command.RPUSH, cmd)
-}
+public fun cmdRPush(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.RPUSH, key, value)
+public fun cmdRPush(key: ByteArray, vararg value: String): Command = keyAndVarargParamCommand(Command.RPUSH, key, *value)
 
 /**
  * RPUSHX key value 
@@ -457,6 +1321,102 @@ public fun cmdRPushX(key: ByteArray, value: String): Command = cmdRPushX(key, va
 public fun cmdRPushX(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.RPUSHX, key, value)
  
 /**
+ * SADD key member [member ...] 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: the number of elements that were added to the set, not including all the elements already present into the set.
+ */
+public fun cmdSAdd(key: String, member: ByteArray): Command = cmdSAdd(key.toByteArray(Charsets.UTF_8), member)
+public fun cmdSAdd(key: String, vararg member: String): Command = cmdSAdd(key.toByteArray(Charsets.UTF_8), *member)
+public fun cmdSAdd(key: ByteArray, member: ByteArray): Command = twoParamCommand(Command.SADD, key, member)
+public fun cmdSAdd(key: ByteArray, vararg member: String): Command = keyAndVarargParamCommand(Command.SADD, key, *member)
+
+/**
+ * SAVE
+ * Available since 1.0.0.
+ * Return value
+ *  Simple string reply: The commands returns OK on success.
+ */
+public fun cmdSave(): Command = singleCommand(Command.SAVE)
+
+/**
+ * SCAN cursor [MATCH pattern] [COUNT count] 
+ * Available since 2.8.0.
+ * ! Is not implemented
+ */
+ 
+/**
+ * SCARD key 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: the cardinality (number of elements) of the set, or 0 if key does not exist. 
+ */
+public fun cmdSCard(key: String): Command = cmdSCard(key.toByteArray(Charsets.UTF_8))
+public fun cmdSCard(key: ByteArray): Command = oneParamCommand(Command.SCARD, key)
+
+/**
+ * SCRIPT DEBUG YES|SYNC|NO 
+ * Available since 3.2.0.
+ * Return value
+ *  Simple string reply: OK.
+ */
+public fun cmdScriptDebug(mode: ScriptDebugMode): Command =
+    oneParamCommand(Command.SCRIPT_DEBUG,
+        when (mode) {
+            ScriptDebugMode.YES -> "YES".toByteArray(Charsets.UTF_8)
+            ScriptDebugMode.SYNC -> "SYNC".toByteArray(Charsets.UTF_8)
+            ScriptDebugMode.NO -> "NO".toByteArray(Charsets.UTF_8)
+        }
+    )
+
+/**
+ * SCRIPT EXISTS sha1 [sha1 ...] 
+ * Available since 2.6.0.
+ * ! Is not implemented
+ */
+
+/**
+ * SCRIPT FLUSH
+ * Available since 2.6.0.
+ * Return value
+ *  Simple string reply
+ */
+public fun cmdScriptFlush(): Command = singleCommand(Command.SCRIPT_FLUSH)
+
+/**
+ * SCRIPT KILL
+ * Available since 2.6.0.
+ * Return value
+ *  Simple string reply
+ */
+public fun cmdScriptKill(): Command = singleCommand(Command.SCRIPT_KILL)
+
+/**
+ * SCRIPT LOAD script 
+ * Available since 2.6.0.
+ * ! Is not implemented
+ */
+ 
+/**
+ * SDIFF key [key ...] 
+ * Available since 1.0.0.
+ * Return value
+ *  Array reply: list with members of the resulting set.
+ */
+public fun cmdSDiff(key: ByteArray): Command = oneParamCommand(Command.SDIFF, key)
+public fun cmdSDiff(vararg key: String): Command = varargParamCommand(Command.SDIFF, *key)
+
+/**
+ * SDIFFSTORE destination key [key ...] 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: the number of elements in the resulting set.
+ */
+public fun cmdSDiffStore(destination: String, vararg key: String): Command = cmdSDiffStore(destination.toByteArray(Charsets.UTF_8), *key)
+public fun cmdSDiffStore(destination: ByteArray, key: ByteArray): Command = twoParamCommand(Command.SDIFFSTORE, destination, key)
+public fun cmdSDiffStore(destination: ByteArray, vararg key: String): Command = keyAndVarargParamCommand(Command.SDIFFSTORE, destination, *key)
+
+/**
  * SELECT index
  * Available since 1.0.0.
  * Return value
@@ -465,13 +1425,264 @@ public fun cmdRPushX(key: ByteArray, value: ByteArray): Command = twoParamComman
 public fun cmdSelect(index: Int): Command = oneParamCommand(Command.SELECT, index.toString().toByteArray(Charsets.UTF_8))
 
 /**
+ * SET key value [EX seconds] [PX milliseconds] [NX|XX] 
+ * Available since 1.0.0.
+ * Return value
+ *  Simple string reply: OK if SET was executed correctly. Null reply: a Null Bulk Reply is returned if the SET operation was not performed because the user specified the NX or XX option but the condition was not met.
+ */
+public fun cmdSet(key: String, value: String, pxs: Int = 0, pxms: Long = 0.toLong(), option: SetOptions = SetOptions.NONE): Command = cmdSet(key.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8), pxs, pxms, option)
+public fun cmdSet(key: ByteArray, value: ByteArray, pxs: Int = 0, pxms: Long = 0.toLong(), option: SetOptions = SetOptions.NONE): Command =
+    Command(Command.SET, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 3 + // command + key + value
+                if (pxs != 0) 1 else 0 +
+                if (pxms != 0L) 1 else 0 +
+                when (option) {
+                    SetOptions.NONE -> 0
+                    else -> 1
+                }
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.SET)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(value)
+            if (pxs != 0)
+                baos.writeAsBulkString(pxs)
+            if (pxms != 0L)
+                baos.writeAsBulkString(pxms)
+            when (option) {
+                SetOptions.NX -> baos.writeAsBulkString("NX")
+                SetOptions.XX -> baos.writeAsBulkString("XX")
+                else -> {}
+            }
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * SETBIT key offset value 
+ * Available since 2.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * SETEX key seconds value 
+ * Available since 2.0.0.
+ * Return value
+ *  Simple string reply
+ */
+public fun cmdSetEX(key: String, seconds: Int, value: String): Command = cmdSetEX(key.toByteArray(Charsets.UTF_8), seconds, value.toByteArray(Charsets.UTF_8))
+public fun cmdSetEX(key: ByteArray, seconds: Int, value: ByteArray): Command =
+    Command(Command.SETEX, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // command + key + seconds + value
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.SETEX)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(seconds)
+            baos.writeAsBulkString(value)
+            baos.toByteArray()
+        }
+    )
+ 
+/**
+ * SETNX key value 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply, specifically:
+ *   1 if the key was set
+ *   0 if the key was not set
+ */
+public fun cmdSetNX(key: String, value: ByteArray): Command = cmdSetNX(key.toByteArray(Charsets.UTF_8), value)
+public fun cmdSetNX(key: String, value: String): Command = cmdSetNX(key.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
+public fun cmdSetNX(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.SETNX, key, value)
+
+/**
+ * SETRANGE key offset value 
+ * Available since 2.2.0.
+ * Return value
+ *  Integer reply: the length of the string after it was modified by the command.
+ */
+public fun cmdSetRange(key: String, offset: Int, value: String): Command = cmdSetRange(key.toByteArray(Charsets.UTF_8), offset, value.toByteArray(Charsets.UTF_8))
+public fun cmdSetRange(key: ByteArray, offset: Int, value: ByteArray): Command =
+    Command(Command.SETRANGE, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // command + key + offset + value
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.SETRANGE)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(offset)
+            baos.writeAsBulkString(value)
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * SHUTDOWN [NOSAVE|SAVE] 
+ * Available since 1.0.0.
+ * Return value
+ *  Simple string reply on error. On success nothing is returned since the server quits and the connection is closed.
+ */
+public fun cmdShutdown(option: ShutdownOptions): Command =
+    oneParamCommand(Command.SHUTDOWN,
+        when (option) {
+            ShutdownOptions.NOSAVE -> "NOSAVE".toByteArray(Charsets.UTF_8)
+            ShutdownOptions.SAVE -> "SAVE".toByteArray(Charsets.UTF_8)
+        }
+    )
+ 
+/**
+ * SINTER key [key ...] 
+ * Available since 1.0.0.
+ * Return value
+ *  Array reply: list with members of the resulting set.
+ */
+public fun cmdSInter(key: ByteArray): Command = oneParamCommand(Command.SINTER, key)
+public fun cmdSInter(vararg key: String): Command = varargParamCommand(Command.SINTER, *key)
+
+/**
+ * SINTERSTORE destination key [key ...] 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: the number of elements in the resulting set.
+ */
+public fun cmdSInterStore(destination: String, vararg key: String): Command = cmdSInterStore(destination.toByteArray(Charsets.UTF_8), *key)
+public fun cmdSInterStore(destination: ByteArray, key: ByteArray): Command = twoParamCommand(Command.SINTERSTORE, destination, key)
+public fun cmdSInterStore(destination: ByteArray, vararg key: String): Command = keyAndVarargParamCommand(Command.SINTERSTORE, destination, *key)
+ 
+/**
+ * SISMEMBER key member 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply, specifically:
+ *   1 if the element is a member of the set.
+ *   0 if the element is not a member of the set, or if key does not exist.
+ */
+public fun cmdSisMember(key: String, member: ByteArray): Command = cmdSisMember(key.toByteArray(Charsets.UTF_8), member)
+public fun cmdSisMember(key: String, member: String): Command = cmdSisMember(key.toByteArray(Charsets.UTF_8), member.toByteArray(Charsets.UTF_8))
+public fun cmdSisMember(key: ByteArray, member: ByteArray): Command = twoParamCommand(Command.SISMEMBER, key, member)
+
+/**
+ * SLAVEOF host port 
+ * Available since 1.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * SLOWLOG subcommand [argument] 
+ * Available since 2.2.12.
+ * ! Is not implemented
+ */
+
+/**
+ * SMEMBERS key
+ * Available since 1.0.0.
+ * Return value
+ *  Array reply: all elements of the set.
+ */
+public fun cmdSMembers(key: String): Command = cmdSMembers(key.toByteArray(Charsets.UTF_8))
+public fun cmdSMembers(key: ByteArray): Command = oneParamCommand(Command.SMEMBERS, key)
+
+/**
+ * SMOVE source destination member 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply, specifically:
+ *   1 if the element is moved.
+ *   0 if the element is not a member of source and no operation was performed.
+ */
+public fun cmdSMove(source: String, destination: String, member: String): Command = cmdSMove(source.toByteArray(Charsets.UTF_8), destination.toByteArray(Charsets.UTF_8), member.toByteArray(Charsets.UTF_8))
+public fun cmdSMove(source: ByteArray, destination: ByteArray, member: ByteArray): Command =
+    Command(Command.SMOVE, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // command + source + destination + member
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.SMOVE)
+            baos.writeAsBulkString(source)
+            baos.writeAsBulkString(destination)
+            baos.writeAsBulkString(member)
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * SORT key [BY pattern] [LIMIT offset count] [GET pattern [GET pattern ...]] [ASC|DESC] [ALPHA] [STORE destination]     
+ * Available since 1.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * SPOP key [count] 
+ * Available since 1.0.0.
+ * Return value
+ *  Bulk string reply: the removed element, or nil when key does not exist.
+ */
+public fun cmdSPop(key: String): Command = cmdSPop(key.toByteArray(Charsets.UTF_8))
+public fun cmdSPop(key: ByteArray): Command = oneParamCommand(Command.SPOP, key)
+public fun cmdSPop(key: String, count: Int): Command = cmdSPop(key.toByteArray(Charsets.UTF_8), count)
+public fun cmdSPop(key: ByteArray, count: Int): Command = twoParamCommand(Command.SPOP, key, count.toString().toByteArray(Charsets.UTF_8))
+
+/**
+ * SRANDMEMBER key [count] 
+ * Available since 1.0.0.
+ * Return value
+ *  Bulk string reply
+ */
+public fun cmdSRandMember(key: String): Command = cmdSRandMember(key.toByteArray(Charsets.UTF_8))
+public fun cmdSRandMember(key: ByteArray): Command = oneParamCommand(Command.SRANDMEMBER, key)
+public fun cmdSRandMember(key: String, count: Int): Command = cmdSRandMember(key.toByteArray(Charsets.UTF_8), count)
+public fun cmdSRandMember(key: ByteArray, count: Int): Command = twoParamCommand(Command.SRANDMEMBER, key, count.toString().toByteArray(Charsets.UTF_8))
+
+/**
+ * SREM key member [member ...] 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: the number of members that were removed from the set, not including non existing members.
+ */
+public fun cmdSRem(key: String, member: ByteArray): Command = cmdSRem(key.toByteArray(Charsets.UTF_8), member)
+public fun cmdSRem(key: String, vararg member: String): Command = cmdSRem(key.toByteArray(Charsets.UTF_8), *member)
+public fun cmdSRem(key: ByteArray, member: ByteArray): Command = twoParamCommand(Command.SREM, key, member)
+public fun cmdSRem(key: ByteArray, vararg member: String): Command = keyAndVarargParamCommand(Command.SREM, key, *member)
+
+/**
+ * SSCAN key cursor [MATCH pattern] [COUNT count] 
+ * Available since 2.8.0.
+ * ! Is not implemented
+ */
+ 
+/**
  * STRLEN key 
  * Available since 2.2.0.
  * Return value
  *  Integer reply: the length of the string at key, or 0 when key does not exist.
  */
-public fun cmdStrLen(key: String): Command = oneParamCommand(Command.STRLEN, key.toByteArray(Charsets.UTF_8))
+public fun cmdStrLen(key: String): Command = cmdStrLen(key.toByteArray(Charsets.UTF_8))
 public fun cmdStrLen(key: ByteArray): Command = oneParamCommand(Command.STRLEN, key)
+
+/**
+ * SUBSCRIBE channel [channel ...] 
+ * Available since 2.0.0.
+ */
+public fun cmdSubscribe(channel: ByteArray): Command = oneParamCommand(Command.SUBSCRIBE, channel)
+public fun cmdSubscribe(vararg channel: String): Command = varargParamCommand(Command.SUBSCRIBE, *channel)
+ 
+/**
+ * SUNION key [key ...] 
+ * Available since 1.0.0.
+ * Return value
+ *  Array reply: list with members of the resulting set.
+ */
+public fun cmdSUnion(key: ByteArray): Command = oneParamCommand(Command.SUNION, key)
+public fun cmdSUnion(vararg key: String): Command = varargParamCommand(Command.SUNION, *key)
+
+/**
+ * SUNIONSTORE destination key [key ...] 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: the number of elements in the resulting set.
+ */
+public fun cmdSUnionStore(destination: String, vararg key: String): Command = cmdSUnionStore(destination.toByteArray(Charsets.UTF_8), *key)
+public fun cmdSUnionStore(destination: ByteArray, key: ByteArray): Command = twoParamCommand(Command.SUNIONSTORE, destination, key)
+public fun cmdSUnionStore(destination: ByteArray, vararg key: String): Command = keyAndVarargParamCommand(Command.SUNIONSTORE, destination, *key)
  
 /**
  * SWAPDB index index
@@ -479,18 +1690,24 @@ public fun cmdStrLen(key: ByteArray): Command = oneParamCommand(Command.STRLEN, 
  * Return value
  *  Simple string reply: OK
  */
-public fun cmdSwapDB(index1: Int, index2: Int): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 3 // komanda + index1 + index2
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.SWAPDB)
-        baos.writeAsBulkString(index1)
-        baos.writeAsBulkString(index2)
-        baos.toByteArray()
-    }
-    return Command(Command.SWAPDB, cmd)
-}
+public fun cmdSwapDB(index1: Int, index2: Int): Command = twoParamCommand(Command.SWAPDB, index1.toString().toByteArray(Charsets.UTF_8), index2.toString().toByteArray(Charsets.UTF_8))
+
+/**
+ * SYNC
+ * Available since 1.0.0.
+ * ! Is not implemented
+ */
+
+/** 
+ * TIME
+ * Available since 2.6.0.
+ * Return value
+ *  Array reply, specifically:
+ *  A multi bulk reply containing two elements:
+ *   unix time in seconds.
+ *   microseconds.
+ */
+public fun cmdTime(): Command = singleCommand(Command.TIME)
 
 /**
  * TOUCH key [key ...] 
@@ -499,17 +1716,33 @@ public fun cmdSwapDB(index1: Int, index2: Int): Command {
  *  Integer reply: The number of keys that were touched.
  */
 public fun cmdTouch(key: ByteArray): Command = oneParamCommand(Command.TOUCH, key)
-public fun cmdTouch(vararg keys: String): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 1 + keys.size // komanda + keys.size
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.TOUCH)
-        baos.writeAsBulkString(*keys)
-        baos.toByteArray()
-    }
-    return Command(Command.TOUCH, cmd)
-}
+public fun cmdTouch(vararg key: String): Command = varargParamCommand(Command.TOUCH, *key)
+
+/**
+ * TTL key 
+ * Available since 1.0.0.
+ * Return value
+ *  Integer reply: TTL in seconds, or a negative value in order to signal an error
+ */
+public fun cmdTtl(key: String): Command = cmdTtl(key.toByteArray(Charsets.UTF_8))
+public fun cmdTtl(key: ByteArray): Command = oneParamCommand(Command.TTL, key)
+
+/**
+ * TYPE key 
+ * Available since 1.0.0.
+ * Return value
+ *  Simple string reply: type of key, or none when key does not exist.
+ */
+public fun cmdType(key: String): Command = cmdType(key.toByteArray(Charsets.UTF_8))
+public fun cmdType(key: ByteArray): Command = oneParamCommand(Command.TYPE, key)
+
+/**
+ * UNSUBSCRIBE [channel [channel ...]]
+ * Available since 2.0.0.
+ */
+public fun cmdUnsubscribe(): Command = singleCommand(Command.UNSUBSCRIBE)
+public fun cmdUnsubscribe(channel: ByteArray): Command = oneParamCommand(Command.UNSUBSCRIBE, channel)
+public fun cmdUnsubscribe(vararg channel: String): Command = varargParamCommand(Command.UNSUBSCRIBE, *channel)
 
 /**
  * UNLINK key [key ...] 
@@ -518,17 +1751,182 @@ public fun cmdTouch(vararg keys: String): Command {
  *  Integer reply: The number of keys that were unlinked.
  */
 public fun cmdUnLink(key: ByteArray): Command = oneParamCommand(Command.UNLINK, key)
-public fun cmdUnLink(vararg keys: String): Command {
-    val baos = ByteArrayOutputStream()
-    val cmd = baos.use {
-        val size = 1 + keys.size // komanda + keys.size
-        baos.writeAsArrayStart(size)
-        baos.writeAsBulkString(Command.UNLINK)
-        baos.writeAsBulkString(*keys)
-        baos.toByteArray()
-    }
-    return Command(Command.UNLINK, cmd)
-}
+public fun cmdUnLink(vararg key: String): Command = varargParamCommand(Command.UNLINK, *key)
+
+/**
+ * UNWATCH
+ * Available since 2.2.0.
+ * Return value
+ *  Simple string reply: always OK.
+ */
+public fun cmdUnwatch(): Command = singleCommand(Command.UNWATCH)
+
+/**
+ * WAIT numslaves timeout 
+ * Available since 3.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * WATCH key [key ...] 
+ * Available since 2.2.0.
+ * Return value
+ *  Simple string reply: always OK.
+ */
+public fun cmdWatch(key: ByteArray): Command = oneParamCommand(Command.WATCH, key)
+public fun cmdWatch(vararg key: String): Command = varargParamCommand(Command.WATCH, *key)
+
+/**
+ * ZADD key [NX|XX] [CH] [INCR] score member [score member ...] 
+ * Available since 1.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ZCARD key 
+ * Available since 1.2.0.
+ * Return value
+ *  Integer reply: the cardinality (number of elements) of the sorted set, or 0 if key does not exist.
+ */
+public fun cmdZCard(key: String): Command = cmdZCard(key.toByteArray(Charsets.UTF_8))
+public fun cmdZCard(key: ByteArray): Command = oneParamCommand(Command.ZCARD, key)
+
+/**
+ * ZCOUNT key min max 
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ZINCRBY key increment member 
+ * Available since 1.2.0.
+ * Return value
+ *  Bulk string reply: the new score of member (a double precision floating point number), represented as string.
+ */
+public fun cmdZIncrBy(key: String, increment: Int, member: String): Command = cmdZIncrBy(key.toByteArray(Charsets.UTF_8), increment, member.toByteArray(Charsets.UTF_8))
+public fun cmdZIncrBy(key: ByteArray, increment: Int, member: ByteArray): Command =
+    Command(Command.ZINCRBY,
+        ByteArrayOutputStream().use { baos ->
+            val size = 4 // komanda + key + increment + member
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(Command.ZINCRBY)
+            baos.writeAsBulkString(key)
+            baos.writeAsBulkString(increment)
+            baos.writeAsBulkString(member)
+            baos.toByteArray()
+        }
+    )
+
+/**
+ * ZINTERSTORE destination numkeys key [key ...] [WEIGHTS weight [weight ...]] [AGGREGATE SUM|MIN|MAX] 
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ZLEXCOUNT key min max 
+ * Available since 2.8.9.
+ * ! Is not implemented
+ */
+
+/**
+ * ZRANGE key start stop [WITHSCORES] 
+ * Available since 1.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ZRANGEBYLEX key min max [LIMIT offset count] 
+ * Available since 2.8.9.
+ * ! Is not implemented
+ */
+
+/**
+ * ZRANGEBYSCORE key min max [WITHSCORES] [LIMIT offset count] 
+ * Available since 1.0.5.
+ * ! Is not implemented
+ */
+
+/**
+ * ZRANK key member 
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ZREM key member [member ...] 
+ * Available since 1.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ZREMRANGEBYLEX key min max 
+ * Available since 2.8.9.
+ * ! Is not implemented
+ */
+
+/**
+ * ZREMRANGEBYRANK key start stop 
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ZREMRANGEBYSCORE key min max 
+ * Available since 1.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ZREVRANGE key start stop [WITHSCORES] 
+ * Available since 1.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ZREVRANGEBYLEX key max min [LIMIT offset count] 
+ * Available since 2.8.9.
+ * ! Is not implemented
+ */
+
+/**
+ * ZREVRANGEBYSCORE key max min [WITHSCORES] [LIMIT offset count] 
+ * Available since 2.2.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ZREVRANK key member 
+ * Available since 2.0.0.
+ * Return value
+ *  If member exists in the sorted set, Integer reply: the rank of member.
+ *  If member does not exist in the sorted set or key does not exist, Bulk string reply: nil.
+ */
+public fun cmdZRevRank(key: String, member: String): Command = cmdZRevRank(key.toByteArray(Charsets.UTF_8), member.toByteArray(Charsets.UTF_8))
+public fun cmdZRevRank(key: String, member: ByteArray): Command = cmdZRevRank(key.toByteArray(Charsets.UTF_8), member)
+public fun cmdZRevRank(key: ByteArray, member: ByteArray): Command = twoParamCommand(Command.ZREVRANK, key, member)
+
+/**
+ * ZSCAN key cursor [MATCH pattern] [COUNT count] 
+ * Available since 2.8.0.
+ * ! Is not implemented
+ */
+
+/**
+ * ZSCORE key member 
+ * Available since 1.2.0.
+ * Return value
+ *  Bulk string reply: the score of member (a double precision floating point number), represented as string.
+ */
+public fun cmdZScore(key: String, member: String): Command = cmdZScore(key.toByteArray(Charsets.UTF_8), member.toByteArray(Charsets.UTF_8))
+public fun cmdZScore(key: String, member: ByteArray): Command = cmdZScore(key.toByteArray(Charsets.UTF_8), member)
+public fun cmdZScore(key: ByteArray, member: ByteArray): Command = twoParamCommand(Command.ZSCORE, key, member)
+
+/**
+ * ZUNIONSTORE destination numkeys key [key ...] [WEIGHTS weight [weight ...]] [AGGREGATE SUM|MIN|MAX] 
+ * Available since 2.0.0.
+ * ! Is not implemented
+ */
 
 /**
  * Command class
