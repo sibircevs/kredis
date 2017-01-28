@@ -25,18 +25,11 @@ import java.net.Socket
  * @param bis
  * @param os
  */
-class RedisProtocol(bis: BufferedInputStream, os: OutputStream) {
-    private val _is: BufferedInputStream
-    private val _os: OutputStream
+class RedisProtocol(private val bis: BufferedInputStream, private val os: OutputStream) {
     companion object {
         val CR = 13.toByte()
         val LF = 10.toByte()
         val NEWLINE = byteArrayOf(13, 10)
-    }
-    
-    init {
-        _is = bis
-        _os = os
     }
 
     /**
@@ -56,7 +49,7 @@ class RedisProtocol(bis: BufferedInputStream, os: OutputStream) {
      */
     @Throws(IOException::class, EOFException::class)
     fun receive(): Reply {
-        val code: Int = _is.read()
+        val code: Int = bis.read()
         
         if (code == -1) {
             throw EOFException()
@@ -88,15 +81,15 @@ class RedisProtocol(bis: BufferedInputStream, os: OutputStream) {
     }
     
     fun send(msg: ByteArray): Unit {
-        _os.write(msg)
+        os.write(msg)
     }
     
     @Throws(IOException::class)
     private fun readSimpleReply(): ByteArray =
         ByteArrayOutputStream().use { baos ->
-            for (b: Byte in _is) {
+            for (b: Byte in bis) {
                 if (b == CR) {
-                    val lf = _is.iterator().next() // Remove byte LF from stream
+                    val lf = bis.iterator().next() // Remove byte LF from stream
                     if (lf == LF)
                         break
                     else
@@ -123,7 +116,7 @@ class RedisProtocol(bis: BufferedInputStream, os: OutputStream) {
         val bytes = ByteArrayOutputStream().use { baos ->
             var total = 0
             if (size > 0) // For correct "$0\r\n\r\n" processing
-                for (b: Byte in _is) {
+                for (b: Byte in bis) {
                     baos.write(b.toInt())
                     total += 1
                     if (total == size) break
@@ -131,8 +124,8 @@ class RedisProtocol(bis: BufferedInputStream, os: OutputStream) {
             baos.toByteArray()
         }
         
-        val cr: Int = _is.read()
-        val lf: Int = _is.read()
+        val cr: Int = bis.read()
+        val lf: Int = bis.read()
         if (bytes.size != size) {
             throw IOException("Wrong size $size. Bytes have been read: ${bytes.size}")
         }        
@@ -150,7 +143,7 @@ class RedisProtocol(bis: BufferedInputStream, os: OutputStream) {
      */
     @Throws(IOException::class, EOFException::class)
     fun receiveAsync(): Reply {
-        synchronized (_is) {
+        synchronized (bis) {
             return receive()
         }
     }
@@ -163,10 +156,10 @@ class RedisProtocol(bis: BufferedInputStream, os: OutputStream) {
      */
     @Throws(IOException::class)
     fun sendAsync(msg: ByteArray) {
-        synchronized (_os) {
+        synchronized (os) {
             send(msg)
         }
-        _os.flush()
+        os.flush()
     }
 
     /**
@@ -176,8 +169,8 @@ class RedisProtocol(bis: BufferedInputStream, os: OutputStream) {
      */
     @Throws(IOException::class)
     fun close() {
-        _is.close()
-        _os.close()
+        bis.close()
+        os.close()
     }
 }
 

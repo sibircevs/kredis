@@ -6,6 +6,10 @@ import java.io.ByteArrayOutputStream
 // https://redis.io/topics/data-types-intro
 // !!! Redis keys are binary safe, this means that you can use any binary sequence as a key
 
+enum class ClientReplyMode {
+    ON, OFF, SKIP
+}
+
 enum class InsertType {
     BEFORE, AFTER
 }
@@ -66,30 +70,20 @@ private fun singleCommand(cmdName: String): Command =
             baos.toByteArray()
         }
     )
-
-private fun oneParamCommand(cmdName: String, param: ByteArray): Command =
+    
+private fun varargParamCommand(cmdName: String, vararg param: ByteArray): Command =
     Command(cmdName, 
         ByteArrayOutputStream().use { baos ->
-            val size = 2 // komanda + param
+            val size = 1 + param.size // komanda + param.size
             baos.writeAsArrayStart(size)
             baos.writeAsBulkString(cmdName)
-            baos.writeAsBulkString(param)
+            for (p in param) {
+                baos.writeAsBulkString(p)
+            }
             baos.toByteArray()
         }
     )
-
-private fun twoParamCommand(cmdName: String, param1: ByteArray, param2: ByteArray): Command =
-    Command(cmdName, 
-        ByteArrayOutputStream().use { baos ->
-            val size = 3 // komanda + param
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(cmdName)
-            baos.writeAsBulkString(param1)
-            baos.writeAsBulkString(param2)
-            baos.toByteArray()
-        }
-    )
-
+    
 private fun varargParamCommand(cmdName: String, vararg param: String): Command =
     Command(cmdName, 
         ByteArrayOutputStream().use { baos ->
@@ -100,15 +94,29 @@ private fun varargParamCommand(cmdName: String, vararg param: String): Command =
             baos.toByteArray()
         }
     )
-    
-private fun keyAndVarargParamCommand(cmdName: String, key: ByteArray, vararg param1: String): Command =
+
+private fun keyAndVarargParamCommand(cmdName: String, key: ByteArray, vararg param: String): Command =
     Command(cmdName, 
         ByteArrayOutputStream().use { baos ->
-            val size = 2 + param1.size // komanda + key + param1.size
+            val size = 2 + param.size // komanda + key + param1.size
             baos.writeAsArrayStart(size)
             baos.writeAsBulkString(cmdName)
             baos.writeAsBulkString(key)
-            baos.writeAsBulkString(*param1)
+            baos.writeAsBulkString(*param)
+            baos.toByteArray()
+        }
+    )
+    
+private fun keyAndVarargParamCommand(cmdName: String, key: ByteArray, vararg param: ByteArray): Command =
+    Command(cmdName, 
+        ByteArrayOutputStream().use { baos ->
+            val size = 2 + param.size // komanda + key + param1.size
+            baos.writeAsArrayStart(size)
+            baos.writeAsBulkString(cmdName)
+            baos.writeAsBulkString(key)
+            for (p in param) {
+                baos.writeAsBulkString(p)
+            }
             baos.toByteArray()
         }
     )
@@ -120,7 +128,7 @@ private fun keyAndVarargParamCommand(cmdName: String, key: ByteArray, vararg par
  *  Integer reply: the length of the string after the append operation.
  */
 public fun cmdAppend(key: String, value: String): Command = cmdAppend(key.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
-public fun cmdAppend(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.APPEND, key, value)
+public fun cmdAppend(key: ByteArray, value: ByteArray): Command = varargParamCommand(Command.APPEND, key, value)
 
 /**
  * AUTH password
@@ -128,7 +136,7 @@ public fun cmdAppend(key: ByteArray, value: ByteArray): Command = twoParamComman
  * Return value
  *  Simple string reply
  */
-public fun cmdAuth(password0: String): Command = oneParamCommand(Command.AUTH, password0.toByteArray(Charsets.UTF_8))
+public fun cmdAuth(password0: String): Command = varargParamCommand(Command.AUTH, password0.toByteArray(Charsets.UTF_8))
 
 /**
  * BGREWRITEAOF
@@ -173,20 +181,33 @@ public fun cmdBGSave(): Command = singleCommand(Command.BGSAVE)
 /**
  * BLPOP key [key ...] timeout 
  * Available since 2.0.0.
- * ! Is not implemented
+ * Return value
+ *  Array reply: specifically:
+ *   A nil multi-bulk when no element could be popped and the timeout expired.
+ *   A two-element multi-bulk with the first element being the name of the key where an element was popped and the second element being the value of the popped element.
  */
+public fun cmdBLPop(key: String, timeout: Long): Command = cmdBLPop(key.toByteArray(Charsets.UTF_8), timeout)
+public fun cmdBLPop(key: ByteArray, timeout: Long): Command = varargParamCommand(Command.BLPOP, key, timeout.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * BRPOP key [key ...] timeout 
  * Available since 2.0.0.
- * ! Is not implemented
+ * Return value
+ *  Array reply: specifically:
+ *   A nil multi-bulk when no element could be popped and the timeout expired.
+ *   A two-element multi-bulk with the first element being the name of the key where an element was popped and the second element being the value of the popped element.
  */
+public fun cmdBRPop(key: String, timeout: Long): Command = cmdBRPop(key.toByteArray(Charsets.UTF_8), timeout)
+public fun cmdBRPop(key: ByteArray, timeout: Long): Command = varargParamCommand(Command.BRPOP, key, timeout.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * BRPOPLPUSH source destination timeout 
  * Available since 2.2.0.
- * ! Is not implemented
+ * Return value
+ *  Bulk string reply: the element being popped from source and pushed to destination. If timeout is reached, a Null reply is returned.
  */
+public fun cmdBRPopLPush(source: String, destination: String, timeout: Long): Command = cmdBRPopLPush(source.toByteArray(Charsets.UTF_8), destination.toByteArray(Charsets.UTF_8), timeout)
+public fun cmdBRPopLPush(source: ByteArray, destination: ByteArray, timeout: Long): Command = varargParamCommand(Command.BRPOPLPUSH, source, destination, timeout.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * CLIENT GETNAME
@@ -215,22 +236,32 @@ public fun cmdClientList(): Command = singleCommand(Command.CLIENT_LIST)
 /**
  * CLIENT PAUSE timeout 
  * Available since 2.9.50.
- * ! Is not implemented
+ * Return value
+ *  Simple string reply: The command returns OK or an error if the timeout is invalid.
  */
+public fun cmdClientPause(timeout: Long): Command = varargParamCommand(Command.CLIENT_PAUSE, timeout.toString().toByteArray(Charsets.UTF_8))
 
 /** 
  * CLIENT REPLY ON|OFF|SKIP 
  * Available since 3.2.
- * ! Is not implemented
+ * Return value
+ *  When called with either OFF or SKIP subcommands, no reply is made. When called with ON:
+ *  Simple string reply: OK.
  */
- 
+public fun cmdClientReply(mode: ClientReplyMode): Command = varargParamCommand(Command.CLIENT_REPLY,
+    when (mode) {
+        ClientReplyMode.ON -> "ON".toByteArray(Charsets.UTF_8)
+        ClientReplyMode.OFF -> "OFF".toByteArray(Charsets.UTF_8)
+        ClientReplyMode.SKIP -> "SKIP".toByteArray(Charsets.UTF_8)
+    })
+
 /**
  * CLIENT SETNAME connection-name
  * Available since 2.6.9.
  * Return value
  *  Simple string reply: OK if the connection name was successfully set.
  */
-public fun cmdClientSetName(name: String): Command = oneParamCommand(Command.CLIENT_SETNAME, name.toByteArray(Charsets.UTF_8))
+public fun cmdClientSetName(name: String): Command = varargParamCommand(Command.CLIENT_SETNAME, name.toByteArray(Charsets.UTF_8))
 
 /**
  * CLUSTER ADDSLOTS slot [slot ...] 
@@ -297,8 +328,10 @@ public fun cmdClusterInfo(): Command = singleCommand(Command.CLUSTER_INFO)
 /**
  * CLUSTER NODES
  * Available since 3.0.0.
- * ! Is not implemented
+ * Return value
+ *  Bulk string reply: The serialized cluster configuration.
  */
+public fun cmdClusterNodes(): Command = singleCommand(Command.CLUSTER_NODES)
 
 /**
  * CLUSTER REPLICATE node-id 
@@ -428,7 +461,7 @@ public fun cmdDBSize(): Command = singleCommand(Command.DBSIZE)
  *  Integer reply: the value of key after the decrement
  */
 public fun cmdDecr(key: String): Command = cmdIncr(key.toByteArray(Charsets.UTF_8))
-public fun cmdDecr(key: ByteArray): Command = oneParamCommand(Command.DECR, key)
+public fun cmdDecr(key: ByteArray): Command = varargParamCommand(Command.DECR, key)
 
 /**
  * DECRBY key decrement 
@@ -436,8 +469,8 @@ public fun cmdDecr(key: ByteArray): Command = oneParamCommand(Command.DECR, key)
  * Return value
  *  Integer reply: the value of key after the decrement
  */
-public fun cmdDecrBy(key: String, decrement : Int): Command = cmdDecrBy(key.toByteArray(Charsets.UTF_8), decrement )
-public fun cmdDecrBy(key: ByteArray, decrement : Int): Command = twoParamCommand(Command.DECRBY, key, decrement .toString().toByteArray(Charsets.UTF_8))
+public fun cmdDecrBy(key: String, decrement: Int): Command = cmdDecrBy(key.toByteArray(Charsets.UTF_8), decrement )
+public fun cmdDecrBy(key: ByteArray, decrement: Int): Command = varargParamCommand(Command.DECRBY, key, decrement.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * DEL key [key ...]
@@ -445,8 +478,8 @@ public fun cmdDecrBy(key: ByteArray, decrement : Int): Command = twoParamCommand
  * Return value:
  *  Integer reply: The number of keys that were removed.
  */
-public fun cmdDel(key: ByteArray): Command = oneParamCommand(Command.DEL, key)
 public fun cmdDel(vararg key: String): Command = varargParamCommand(Command.DEL, *key)
+public fun cmdDel(vararg key: ByteArray): Command = varargParamCommand(Command.DEL, *key)
 
 /**
  * DISCARD
@@ -463,7 +496,7 @@ public fun cmdDiscard(): Command = singleCommand(Command.DISCARD)
  *  Bulk string reply: the serialized value.
  */
 public fun cmdDump(key: String): Command = cmdDump(key.toByteArray(Charsets.UTF_8))
-public fun cmdDump(key: ByteArray): Command = oneParamCommand(Command.DUMP, key)
+public fun cmdDump(key: ByteArray): Command = varargParamCommand(Command.DUMP, key)
 
 /**
  * ECHO message
@@ -471,7 +504,7 @@ public fun cmdDump(key: ByteArray): Command = oneParamCommand(Command.DUMP, key)
  * Return value
  *  Bulk string reply
  */
-public fun cmdEcho(msg: String): Command = oneParamCommand(Command.ECHO, msg.toByteArray(Charsets.UTF_8))
+public fun cmdEcho(msg: String): Command = varargParamCommand(Command.ECHO, msg.toByteArray(Charsets.UTF_8))
 
 /**
  * EVAL script numkeys key [key ...] arg [arg ...] 
@@ -502,8 +535,8 @@ public fun cmdExec(): Command = singleCommand(Command.EXEC)
  *  1 if the key exists.
  *  0 if the key does not exist.
  */
-public fun cmdExists(key: ByteArray): Command = oneParamCommand(Command.EXISTS, key)
 public fun cmdExists(vararg key: String): Command = varargParamCommand(Command.EXISTS, *key)
+public fun cmdExists(vararg key: ByteArray): Command = varargParamCommand(Command.EXISTS, *key)
 
 /**
  * EXPIRE key seconds 
@@ -572,7 +605,7 @@ public fun cmdExists(vararg key: String): Command = varargParamCommand(Command.E
  *  Bulk string reply: the value of key, or nil when key does not exist.
  */
 public fun cmdGet(key: String): Command = cmdGet(key.toByteArray(Charsets.UTF_8))
-public fun cmdGet(key: ByteArray): Command = oneParamCommand(Command.GET, key)
+public fun cmdGet(key: ByteArray): Command = varargParamCommand(Command.GET, key)
  
 /**
  * GETBIT key offset 
@@ -587,18 +620,7 @@ public fun cmdGet(key: ByteArray): Command = oneParamCommand(Command.GET, key)
  *  Bulk string reply
  */
 public fun cmdGetRange(key: String, start: Int, end: Int): Command = cmdGetRange(key.toByteArray(Charsets.UTF_8), start, end)
-public fun cmdGetRange(key: ByteArray, start: Int, end: Int): Command =
-    Command(Command.GETRANGE,
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // komanda + key + start + end
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.GETRANGE)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(start)
-            baos.writeAsBulkString(end)
-            baos.toByteArray()
-        }
-    )
+public fun cmdGetRange(key: ByteArray, start: Int, end: Int): Command = varargParamCommand(Command.GETRANGE, key, start.toString().toByteArray(Charsets.UTF_8), end.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * GETSET key value 
@@ -607,7 +629,7 @@ public fun cmdGetRange(key: ByteArray, start: Int, end: Int): Command =
  *  Bulk string reply: the old value stored at key, or nil when key did not exist.
  */
 public fun cmdGetSet(key: String, value: String): Command = cmdGetSet(key.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
-public fun cmdGetSet(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.GETSET, key, value)
+public fun cmdGetSet(key: ByteArray, value: ByteArray): Command = varargParamCommand(Command.GETSET, key, value)
 
 /**
  * HDEL key field [field ...] 
@@ -615,9 +637,9 @@ public fun cmdGetSet(key: ByteArray, value: ByteArray): Command = twoParamComman
  * Return value
  * Integer reply: the number of fields that were removed from the hash, not including specified but non existing fields.
  */
-public fun cmdHDel(key: String, field: ByteArray): Command = cmdHDel(key.toByteArray(Charsets.UTF_8), field)
+public fun cmdHDel(key: String, vararg field: ByteArray): Command = cmdHDel(key.toByteArray(Charsets.UTF_8), *field)
 public fun cmdHDel(key: String, vararg field: String): Command = cmdHDel(key.toByteArray(Charsets.UTF_8), *field)
-public fun cmdHDel(key: ByteArray, field: ByteArray): Command = twoParamCommand(Command.HDEL, key, field)
+public fun cmdHDel(key: ByteArray, vararg field: ByteArray): Command = keyAndVarargParamCommand(Command.HDEL, key, *field)
 public fun cmdHDel(key: ByteArray, vararg field: String): Command = keyAndVarargParamCommand(Command.HDEL, key, *field)
 
 /**
@@ -629,7 +651,7 @@ public fun cmdHDel(key: ByteArray, vararg field: String): Command = keyAndVararg
  *   0 if the hash does not contain field, or key does not exist.
  */
 public fun cmdHExists(key: String, field: String): Command = cmdHExists(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8))
-public fun cmdHExists(key: ByteArray, field: ByteArray): Command = twoParamCommand(Command.HEXISTS, key, field)
+public fun cmdHExists(key: ByteArray, field: ByteArray): Command = varargParamCommand(Command.HEXISTS, key, field)
 
 /**
  * HGET key field 
@@ -638,7 +660,7 @@ public fun cmdHExists(key: ByteArray, field: ByteArray): Command = twoParamComma
  *  Bulk string reply: the value associated with field, or nil when field is not present in the hash or key does not exist.
  */
 public fun cmdHGet(key: String, field: String): Command = cmdHGet(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8))
-public fun cmdHGet(key: ByteArray, field: ByteArray): Command = twoParamCommand(Command.HGET, key, field)
+public fun cmdHGet(key: ByteArray, field: ByteArray): Command = varargParamCommand(Command.HGET, key, field)
 
 /**
  * HGETALL key 
@@ -647,7 +669,7 @@ public fun cmdHGet(key: ByteArray, field: ByteArray): Command = twoParamCommand(
  *  Array reply: list of fields and their values stored in the hash, or an empty list when key does not exist.
  */
 public fun cmdHGetAll(key: String): Command = cmdHGetAll(key.toByteArray(Charsets.UTF_8))
-public fun cmdHGetAll(key: ByteArray): Command = oneParamCommand(Command.HGETALL, key)
+public fun cmdHGetAll(key: ByteArray): Command = varargParamCommand(Command.HGETALL, key)
 
 /**
  * HINCRBY key field increment 
@@ -656,18 +678,7 @@ public fun cmdHGetAll(key: ByteArray): Command = oneParamCommand(Command.HGETALL
  *  Integer reply: the value at field after the increment operation.
  */
 public fun cmdHIncrBy(key: String, field: String, increment: Int): Command = cmdHIncrBy(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8), increment)
-public fun cmdHIncrBy(key: ByteArray, field: ByteArray, increment: Int): Command =
-    Command(Command.HINCRBY,
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // komanda + key + field + increment
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.HINCRBY)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(field)
-            baos.writeAsBulkString(increment)
-            baos.toByteArray()
-        }
-    )
+public fun cmdHIncrBy(key: ByteArray, field: ByteArray, increment: Int): Command = varargParamCommand(Command.HINCRBY, key, field, increment.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * HINCRBYFLOAT key field increment 
@@ -676,18 +687,7 @@ public fun cmdHIncrBy(key: ByteArray, field: ByteArray, increment: Int): Command
  *  Bulk string reply: the value of field after the increment.
  */
 public fun cmdHIncrByFloat(key: String, field: String, increment: Float): Command = cmdHIncrByFloat(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8), increment)
-public fun cmdHIncrByFloat(key: ByteArray, field: ByteArray, increment: Float): Command =
-    Command(Command.HINCRBYFLOAT,
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // komanda + key + field + increment
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.HINCRBYFLOAT)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(field)
-            baos.writeAsBulkString(increment)
-            baos.toByteArray()
-        }
-    )
+public fun cmdHIncrByFloat(key: ByteArray, field: ByteArray, increment: Float): Command = varargParamCommand(Command.HINCRBYFLOAT, key, field, increment.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * HKEYS key 
@@ -696,7 +696,7 @@ public fun cmdHIncrByFloat(key: ByteArray, field: ByteArray, increment: Float): 
  *  Array reply: list of fields in the hash, or an empty list when key does not exist.
  */
 public fun cmdHKeys(key: String): Command = cmdHKeys(key.toByteArray(Charsets.UTF_8))
-public fun cmdHKeys(key: ByteArray): Command = oneParamCommand(Command.HKEYS, key)
+public fun cmdHKeys(key: ByteArray): Command = varargParamCommand(Command.HKEYS, key)
 
 /**
  * HLEN key 
@@ -705,7 +705,7 @@ public fun cmdHKeys(key: ByteArray): Command = oneParamCommand(Command.HKEYS, ke
  *  Integer reply: number of fields in the hash, or 0 when key does not exist.
  */
 public fun cmdHLen(key: String): Command = cmdHLen(key.toByteArray(Charsets.UTF_8))
-public fun cmdHLen(key: ByteArray): Command = oneParamCommand(Command.HLEN, key)
+public fun cmdHLen(key: ByteArray): Command = varargParamCommand(Command.HLEN, key)
 
 /**
  * HMGET key field [field ...] 
@@ -713,9 +713,9 @@ public fun cmdHLen(key: ByteArray): Command = oneParamCommand(Command.HLEN, key)
  * Return value
  *  Array reply: list of values associated with the given fields, in the same order as they are requested.
  */
-public fun cmdHMGet(key: String, field: ByteArray): Command = cmdHMGet(key.toByteArray(Charsets.UTF_8), field)
+public fun cmdHMGet(key: String, vararg field: ByteArray): Command = cmdHMGet(key.toByteArray(Charsets.UTF_8), *field)
 public fun cmdHMGet(key: String, vararg field: String): Command = cmdHMGet(key.toByteArray(Charsets.UTF_8), *field)
-public fun cmdHMGet(key: ByteArray, field: ByteArray): Command = twoParamCommand(Command.HMGET, key, field)
+public fun cmdHMGet(key: ByteArray, vararg field: ByteArray): Command = keyAndVarargParamCommand(Command.HMGET, key, *field)
 public fun cmdHMGet(key: ByteArray, vararg field: String): Command = keyAndVarargParamCommand(Command.HMGET, key, *field)
 
 /**
@@ -755,18 +755,7 @@ public fun cmdHMSet(key: ByteArray, data: Map<String, String>): Command =
  *   0 if field already exists in the hash and the value was updated.
  */
 public fun cmdHSet(key: String, field: String, value: String): Command = cmdHSet(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
-public fun cmdHSet(key: ByteArray, field: ByteArray, value: ByteArray): Command =
-    Command(Command.HSET, 
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // command + key + field + value
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.HSET)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(field)
-            baos.writeAsBulkString(value)
-            baos.toByteArray()
-        }
-    )
+public fun cmdHSet(key: ByteArray, field: ByteArray, value: ByteArray): Command = varargParamCommand(Command.HSET, key, field, value)
 
 /**
  * HSETNX key field value 
@@ -777,18 +766,7 @@ public fun cmdHSet(key: ByteArray, field: ByteArray, value: ByteArray): Command 
  *   0 if field already exists in the hash and no operation was performed.
  */
 public fun cmdHSetNX(key: String, field: String, value: String): Command = cmdHSetNX(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
-public fun cmdHSetNX(key: ByteArray, field: ByteArray, value: ByteArray): Command =
-    Command(Command.HSETNX, 
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // command + key + field + value
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.HSETNX)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(field)
-            baos.writeAsBulkString(value)
-            baos.toByteArray()
-        }
-    )
+public fun cmdHSetNX(key: ByteArray, field: ByteArray, value: ByteArray): Command = varargParamCommand(Command.HSETNX, key, field, value)
 
 /**
  * HSTRLEN key field 
@@ -797,7 +775,7 @@ public fun cmdHSetNX(key: ByteArray, field: ByteArray, value: ByteArray): Comman
  *  Integer reply: the string length of the value associated with field, or zero when field is not present in the hash or key does not exist at all.
  */
 public fun cmdHStrLen(key: String, field: String): Command = cmdHStrLen(key.toByteArray(Charsets.UTF_8), field.toByteArray(Charsets.UTF_8))
-public fun cmdHStrLen(key: ByteArray, field: ByteArray): Command = twoParamCommand(Command.HSTRLEN, key, field)
+public fun cmdHStrLen(key: ByteArray, field: ByteArray): Command = varargParamCommand(Command.HSTRLEN, key, field)
 
 /**
  * HVALS key 
@@ -806,7 +784,7 @@ public fun cmdHStrLen(key: ByteArray, field: ByteArray): Command = twoParamComma
  *  Array reply: list of values in the hash, or an empty list when key does not exist.
  */
 public fun cmdHVals(key: String): Command = cmdHVals(key.toByteArray(Charsets.UTF_8))
-public fun cmdHVals(key: ByteArray): Command = oneParamCommand(Command.HVALS, key)
+public fun cmdHVals(key: ByteArray): Command = varargParamCommand(Command.HVALS, key)
 
 /**
  * INCR key 
@@ -815,7 +793,7 @@ public fun cmdHVals(key: ByteArray): Command = oneParamCommand(Command.HVALS, ke
  *  Integer reply: the value of key after the increment
  */
 public fun cmdIncr(key: String): Command = cmdIncr(key.toByteArray(Charsets.UTF_8))
-public fun cmdIncr(key: ByteArray): Command = oneParamCommand(Command.INCR, key)
+public fun cmdIncr(key: ByteArray): Command = varargParamCommand(Command.INCR, key)
 
 /**
  * INCRBY key increment 
@@ -824,7 +802,7 @@ public fun cmdIncr(key: ByteArray): Command = oneParamCommand(Command.INCR, key)
  *  Integer reply: the value of key after the increment
  */
 public fun cmdIncrBy(key: String, increment: Int): Command = cmdIncrBy(key.toByteArray(Charsets.UTF_8), increment)
-public fun cmdIncrBy(key: ByteArray, increment: Int): Command = twoParamCommand(Command.INCRBY, key, increment.toString().toByteArray(Charsets.UTF_8))
+public fun cmdIncrBy(key: ByteArray, increment: Int): Command = varargParamCommand(Command.INCRBY, key, increment.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * INCRBYFLOAT key increment 
@@ -833,7 +811,7 @@ public fun cmdIncrBy(key: ByteArray, increment: Int): Command = twoParamCommand(
  *  Bulk string reply: the value of key after the increment.
  */
 public fun cmdIncrByFloat(key: String, increment: Float): Command = cmdIncrByFloat(key.toByteArray(Charsets.UTF_8), increment)
-public fun cmdIncrByFloat(key: ByteArray, increment: Float): Command = twoParamCommand(Command.INCRBYFLOAT, key, increment.toString().toByteArray(Charsets.UTF_8))
+public fun cmdIncrByFloat(key: ByteArray, increment: Float): Command = varargParamCommand(Command.INCRBYFLOAT, key, increment.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * INFO [section] 
@@ -842,7 +820,7 @@ public fun cmdIncrByFloat(key: ByteArray, increment: Float): Command = twoParamC
  *  Bulk string reply: as a collection of text lines.
  *  Lines can contain a section name (starting with a # character) or a property. All the properties are in the form of field:value terminated by \r\n.
  */
-public fun cmdInfo(section: String = ""): Command = if (section == "") singleCommand(Command.INFO) else oneParamCommand(Command.INFO, section.toByteArray(Charsets.UTF_8))
+public fun cmdInfo(section: String = ""): Command = if (section == "") singleCommand(Command.INFO) else varargParamCommand(Command.INFO, section.toByteArray(Charsets.UTF_8))
 
 /**
  * KEYS pattern 
@@ -850,7 +828,7 @@ public fun cmdInfo(section: String = ""): Command = if (section == "") singleCom
  * Return value
  *  Array reply: list of keys matching pattern.
  */
-public fun cmdKeys(pattern: String): Command = oneParamCommand(Command.KEYS, pattern.toByteArray(Charsets.UTF_8))
+public fun cmdKeys(pattern: String): Command = varargParamCommand(Command.KEYS, pattern.toByteArray(Charsets.UTF_8))
 
 /**
  * LASTSAVE
@@ -867,7 +845,7 @@ public fun cmdLastSave(): Command = singleCommand(Command.LASTSAVE)
  *  Bulk string reply: the requested element, or nil when index is out of range.
  */
 public fun cmdLIndex(key: String, index: Int): Command = cmdLIndex(key.toByteArray(Charsets.UTF_8), index)
-public fun cmdLIndex(key: ByteArray, index: Int): Command = twoParamCommand(Command.LINDEX, key, index.toString().toByteArray(Charsets.UTF_8))
+public fun cmdLIndex(key: ByteArray, index: Int): Command = varargParamCommand(Command.LINDEX, key, index.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * LINSERT key BEFORE|AFTER pivot value
@@ -901,7 +879,7 @@ public fun cmdLInsert(key: ByteArray, insertType: InsertType, pivot: ByteArray, 
  *  Integer reply: the length of the list at key.
  */
 public fun cmdLLen(key: String): Command = cmdLLen(key.toByteArray(Charsets.UTF_8))
-public fun cmdLLen(key: ByteArray): Command = oneParamCommand(Command.LLEN, key)
+public fun cmdLLen(key: ByteArray): Command = varargParamCommand(Command.LLEN, key)
 
 /**
  * LPOP key
@@ -910,7 +888,7 @@ public fun cmdLLen(key: ByteArray): Command = oneParamCommand(Command.LLEN, key)
  *  Bulk string reply
  */
 public fun cmdLPop(key: String): Command = cmdLPop(key.toByteArray(Charsets.UTF_8))
-public fun cmdLPop(key: ByteArray): Command = oneParamCommand(Command.LPOP, key)
+public fun cmdLPop(key: ByteArray): Command = varargParamCommand(Command.LPOP, key)
 
 /**
  * LPUSH key value [value ...]
@@ -918,9 +896,9 @@ public fun cmdLPop(key: ByteArray): Command = oneParamCommand(Command.LPOP, key)
  * Return value
  *  Integer reply: the length of the list after the push operations.
  */
-public fun cmdLPush(key: String, value: ByteArray): Command = cmdLPush(key.toByteArray(Charsets.UTF_8), value)
-public fun cmdLPush(key: String, vararg values: String): Command = cmdLPush(key.toByteArray(Charsets.UTF_8), *values)
-public fun cmdLPush(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.LPUSH, key, value)
+public fun cmdLPush(key: String, vararg value: ByteArray): Command = cmdLPush(key.toByteArray(Charsets.UTF_8), *value)
+public fun cmdLPush(key: String, vararg value: String): Command = cmdLPush(key.toByteArray(Charsets.UTF_8), *value)
+public fun cmdLPush(key: ByteArray, vararg value: ByteArray): Command = keyAndVarargParamCommand(Command.LPUSH, key, *value)
 public fun cmdLPush(key: ByteArray, vararg value: String): Command = keyAndVarargParamCommand(Command.LPUSH, key, *value)
 
 /**
@@ -932,7 +910,7 @@ public fun cmdLPush(key: ByteArray, vararg value: String): Command = keyAndVarar
 public fun cmdLPushX(key: String, value: ByteArray): Command = cmdLPushX(key.toByteArray(Charsets.UTF_8), value)
 public fun cmdLPushX(key: String, value: String): Command = cmdLPushX(key.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
 public fun cmdLPushX(key: ByteArray, value: String): Command = cmdLPushX(key, value.toByteArray(Charsets.UTF_8))
-public fun cmdLPushX(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.LPUSHX, key, value)
+public fun cmdLPushX(key: ByteArray, value: ByteArray): Command = keyAndVarargParamCommand(Command.LPUSHX, key, value)
 
 /**
  * LRANGE key start stop 
@@ -941,18 +919,7 @@ public fun cmdLPushX(key: ByteArray, value: ByteArray): Command = twoParamComman
  *  Array reply: list of elements in the specified range.
  */
 public fun cmdLRange(key: String, start: Int, stop: Int): Command = cmdLRange(key.toByteArray(Charsets.UTF_8), start, stop)
-public fun cmdLRange(key: ByteArray, start: Int, stop: Int): Command =
-    Command(Command.LRANGE,
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // komanda + key + start + stop
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.LRANGE)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(start)
-            baos.writeAsBulkString(stop)
-            baos.toByteArray()
-        }
-    )
+public fun cmdLRange(key: ByteArray, start: Int, stop: Int): Command = varargParamCommand(Command.LRANGE, key, start.toString().toByteArray(Charsets.UTF_8), stop.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * LREM key count value
@@ -962,18 +929,7 @@ public fun cmdLRange(key: ByteArray, start: Int, stop: Int): Command =
  */
 public fun cmdLRem(key: String, count: Int, value: String): Command = cmdLRem(key.toByteArray(Charsets.UTF_8), count, value.toByteArray(Charsets.UTF_8))
 public fun cmdLRem(key: ByteArray, count: Int, value: String): Command = cmdLRem(key, count, value.toByteArray(Charsets.UTF_8))
-public fun cmdLRem(key: ByteArray, count: Int, value: ByteArray): Command =
-    Command(Command.LREM,
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // komanda + key + count + value
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.LREM)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(count)
-            baos.writeAsBulkString(value)
-            baos.toByteArray()
-        }
-    )
+public fun cmdLRem(key: ByteArray, count: Int, value: ByteArray): Command = varargParamCommand(Command.LREM, key, count.toString().toByteArray(Charsets.UTF_8), value)
 
 /**
  * LSET key index value 
@@ -983,18 +939,7 @@ public fun cmdLRem(key: ByteArray, count: Int, value: ByteArray): Command =
  */
 public fun cmdLSet(key: String, index: Int, value: String): Command = cmdLSet(key.toByteArray(Charsets.UTF_8), index, value.toByteArray(Charsets.UTF_8))
 public fun cmdLSet(key: ByteArray, index: Int, value: String): Command = cmdLSet(key, index, value.toByteArray(Charsets.UTF_8))
-public fun cmdLSet(key: ByteArray, index: Int, value: ByteArray): Command = 
-    Command(Command.LSET,
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // komanda + key + index + value
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.LSET)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(index)
-            baos.writeAsBulkString(value)
-            baos.toByteArray()
-        }
-    )
+public fun cmdLSet(key: ByteArray, index: Int, value: ByteArray): Command = varargParamCommand(Command.LSET, key, index.toString().toByteArray(Charsets.UTF_8), value)
 
 /**
  * LTRIM key start stop 
@@ -1003,18 +948,7 @@ public fun cmdLSet(key: ByteArray, index: Int, value: ByteArray): Command =
  *  Simple string reply
  */
 public fun cmdLTrim(key: String, start: Int, stop: Int): Command = cmdLTrim(key.toByteArray(Charsets.UTF_8), start, stop)
-public fun cmdLTrim(key: ByteArray, start: Int, stop: Int): Command =
-    Command(Command.LTRIM, 
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // komanda + key + start + stop
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.LTRIM)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(start)
-            baos.writeAsBulkString(stop)
-            baos.toByteArray()
-        }
-    )
+public fun cmdLTrim(key: ByteArray, start: Int, stop: Int): Command = varargParamCommand(Command.LTRIM, key, start.toString().toByteArray(Charsets.UTF_8), stop.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * MGET key [key ...] 
@@ -1022,7 +956,7 @@ public fun cmdLTrim(key: ByteArray, start: Int, stop: Int): Command =
  * Return value
  *  Array reply: list of values at the specified keys.
  */
-public fun cmdMGet(key: ByteArray): Command = oneParamCommand(Command.MGET, key)
+public fun cmdMGet(vararg key: ByteArray): Command = varargParamCommand(Command.MGET, *key)
 public fun cmdMGet(vararg key: String): Command = varargParamCommand(Command.MGET, *key)
      
 /**
@@ -1046,7 +980,7 @@ public fun cmdMGet(vararg key: String): Command = varargParamCommand(Command.MGE
  *  0 if key was not moved.
  */
 public fun cmdMove(key: String, db: Int): Command = cmdMove(key.toByteArray(Charsets.UTF_8), db)
-public fun cmdMove(key: ByteArray, db: Int): Command = twoParamCommand(Command.MOVE, key, db.toString().toByteArray(Charsets.UTF_8))
+public fun cmdMove(key: ByteArray, db: Int): Command = varargParamCommand(Command.MOVE, key, db.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * MSET key value [key value ...] 
@@ -1113,7 +1047,7 @@ public fun cmdMulti(): Command = singleCommand(Command.MULTI)
  *   0 if key does not exist or does not have an associated timeout.
  */
 public fun cmdPersist(key: String): Command = cmdPersist(key.toByteArray(Charsets.UTF_8))
-public fun cmdPersist(key: ByteArray): Command = oneParamCommand(Command.PERSIST, key)
+public fun cmdPersist(key: ByteArray): Command = varargParamCommand(Command.PERSIST, key)
 
 /**
  * PEXPIRE key milliseconds 
@@ -1134,9 +1068,9 @@ public fun cmdPersist(key: ByteArray): Command = oneParamCommand(Command.PERSIST
  *  Integer reply, specifically:
  *  1 if at least 1 HyperLogLog internal register was altered. 0 otherwise.
  */
-public fun cmdPFAdd(key: String, element: ByteArray): Command = cmdPFAdd(key.toByteArray(Charsets.UTF_8), element)
+public fun cmdPFAdd(key: String, vararg element: ByteArray): Command = cmdPFAdd(key.toByteArray(Charsets.UTF_8), *element)
 public fun cmdPFAdd(key: String, vararg element: String): Command = cmdPFAdd(key.toByteArray(Charsets.UTF_8), *element)
-public fun cmdPFAdd(key: ByteArray, element: ByteArray): Command = twoParamCommand(Command.PFADD, key, element)
+public fun cmdPFAdd(key: ByteArray, vararg element: ByteArray): Command = keyAndVarargParamCommand(Command.PFADD, key, *element)
 public fun cmdPFAdd(key: ByteArray, vararg element: String): Command = keyAndVarargParamCommand(Command.PFADD, key, *element)
 
 /**
@@ -1147,7 +1081,7 @@ public fun cmdPFAdd(key: ByteArray, vararg element: String): Command = keyAndVar
  *  The approximated number of unique elements observed via PFADD.
  */
 public fun cmdPFCount(vararg key: String): Command = varargParamCommand(Command.PFCOUNT, *key)
-public fun cmdPFCount(key: ByteArray): Command = oneParamCommand(Command.PFCOUNT, key)
+public fun cmdPFCount(vararg key: ByteArray): Command = varargParamCommand(Command.PFCOUNT, *key)
 
 /**
  * PFMERGE destkey sourcekey [sourcekey ...] 
@@ -1162,25 +1096,14 @@ public fun cmdPFCount(key: ByteArray): Command = oneParamCommand(Command.PFCOUNT
  *  Simple string reply
  */
 public fun cmdPing(): Command = singleCommand(Command.PING)
-public fun cmdPing(msg: String): Command = oneParamCommand(Command.PING, msg.toByteArray(Charsets.UTF_8))
+public fun cmdPing(msg: String): Command = varargParamCommand(Command.PING, msg.toByteArray(Charsets.UTF_8))
 
 /**
  * PSETEX key milliseconds value 
  * Available since 2.6.0.
  */
 public fun cmdPSetEX(key: String, milliseconds: Long, value: String): Command = cmdPSetEX(key.toByteArray(Charsets.UTF_8), milliseconds, value.toByteArray(Charsets.UTF_8))
-public fun cmdPSetEX(key: ByteArray, milliseconds: Long, value: ByteArray): Command =
-    Command(Command.PSETEX, 
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // command + key + milliseconds + value
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.PSETEX)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(milliseconds)
-            baos.writeAsBulkString(value)
-            baos.toByteArray()
-        }
-    )
+public fun cmdPSetEX(key: ByteArray, milliseconds: Long, value: ByteArray): Command = varargParamCommand(Command.PSETEX, key, milliseconds.toString().toByteArray(Charsets.UTF_8), value)
 
 /**
  * PSUBSCRIBE pattern [pattern ...] 
@@ -1195,7 +1118,7 @@ public fun cmdPSetEX(key: ByteArray, milliseconds: Long, value: ByteArray): Comm
  *  Integer reply: TTL in milliseconds, or a negative value in order to signal an error .
  */
 public fun cmdPTtl(key: String): Command = cmdPTtl(key.toByteArray(Charsets.UTF_8))
-public fun cmdPTtl(key: ByteArray): Command = oneParamCommand(Command.PTTL, key)
+public fun cmdPTtl(key: ByteArray): Command = varargParamCommand(Command.PTTL, key)
 
 /**
  * PUBLISH channel message
@@ -1255,7 +1178,7 @@ public fun cmdReadWrite(): Command = singleCommand(Command.READWRITE)
  *  Simple string reply
  */
 public fun cmdRename(key: String, newkey: String): Command = cmdRename(key.toByteArray(Charsets.UTF_8), newkey.toByteArray(Charsets.UTF_8))
-public fun cmdRename(key: ByteArray, newkey: ByteArray): Command = twoParamCommand(Command.RENAME, key, newkey)
+public fun cmdRename(key: ByteArray, newkey: ByteArray): Command = varargParamCommand(Command.RENAME, key, newkey)
 
 /**
  * RENAMENX key newkey 
@@ -1266,7 +1189,7 @@ public fun cmdRename(key: ByteArray, newkey: ByteArray): Command = twoParamComma
  *  0 if newkey already exists.
  */
 public fun cmdRenameNx(key: String, newkey: String): Command = cmdRenameNx(key.toByteArray(Charsets.UTF_8), newkey.toByteArray(Charsets.UTF_8))
-public fun cmdRenameNx(key: ByteArray, newkey: ByteArray): Command = twoParamCommand(Command.RENAMENX, key, newkey)
+public fun cmdRenameNx(key: ByteArray, newkey: ByteArray): Command = varargParamCommand(Command.RENAMENX, key, newkey)
 
 /**
  * RESTORE key ttl serialized-value [REPLACE] 
@@ -1287,7 +1210,7 @@ public fun cmdRenameNx(key: ByteArray, newkey: ByteArray): Command = twoParamCom
  *  Bulk string reply: the value of the last element, or nil when key does not exist.
  */
 public fun cmdRPop(key: String): Command = cmdRPop(key.toByteArray(Charsets.UTF_8))
-public fun cmdRPop(key: ByteArray): Command = oneParamCommand(Command.RPOP, key)
+public fun cmdRPop(key: ByteArray): Command = varargParamCommand(Command.RPOP, key)
 
 /**
  * RPOPLPUSH source destination
@@ -1296,7 +1219,7 @@ public fun cmdRPop(key: ByteArray): Command = oneParamCommand(Command.RPOP, key)
  *  Bulk string reply: the element being popped and pushed.
  */
 public fun cmdRPopLPush(source: String, destination: String): Command = cmdRPopLPush(source.toByteArray(Charsets.UTF_8), destination.toByteArray(Charsets.UTF_8))
-public fun cmdRPopLPush(source: ByteArray, destination: ByteArray): Command = twoParamCommand(Command.RPOPLPUSH, source, destination)
+public fun cmdRPopLPush(source: ByteArray, destination: ByteArray): Command = varargParamCommand(Command.RPOPLPUSH, source, destination)
 
 /**
  * RPUSH key value [value ...] 
@@ -1304,9 +1227,9 @@ public fun cmdRPopLPush(source: ByteArray, destination: ByteArray): Command = tw
  * Return value
  *  Integer reply: the length of the list after the push operation.
  */
-public fun cmdRPush(key: String, value: ByteArray): Command = cmdRPush(key.toByteArray(Charsets.UTF_8), value)
-public fun cmdRPush(key: String, vararg values: String): Command = cmdRPush(key.toByteArray(Charsets.UTF_8), *values)
-public fun cmdRPush(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.RPUSH, key, value)
+public fun cmdRPush(key: String, vararg value: ByteArray): Command = cmdRPush(key.toByteArray(Charsets.UTF_8), *value)
+public fun cmdRPush(key: String, vararg value: String): Command = cmdRPush(key.toByteArray(Charsets.UTF_8), *value)
+public fun cmdRPush(key: ByteArray, vararg value: ByteArray): Command = keyAndVarargParamCommand(Command.RPUSH, key, *value)
 public fun cmdRPush(key: ByteArray, vararg value: String): Command = keyAndVarargParamCommand(Command.RPUSH, key, *value)
 
 /**
@@ -1318,7 +1241,7 @@ public fun cmdRPush(key: ByteArray, vararg value: String): Command = keyAndVarar
 public fun cmdRPushX(key: String, value: ByteArray): Command = cmdRPushX(key.toByteArray(Charsets.UTF_8), value)
 public fun cmdRPushX(key: String, value: String): Command = cmdRPushX(key.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
 public fun cmdRPushX(key: ByteArray, value: String): Command = cmdRPushX(key, value.toByteArray(Charsets.UTF_8))
-public fun cmdRPushX(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.RPUSHX, key, value)
+public fun cmdRPushX(key: ByteArray, value: ByteArray): Command = varargParamCommand(Command.RPUSHX, key, value)
  
 /**
  * SADD key member [member ...] 
@@ -1326,9 +1249,9 @@ public fun cmdRPushX(key: ByteArray, value: ByteArray): Command = twoParamComman
  * Return value
  *  Integer reply: the number of elements that were added to the set, not including all the elements already present into the set.
  */
-public fun cmdSAdd(key: String, member: ByteArray): Command = cmdSAdd(key.toByteArray(Charsets.UTF_8), member)
+public fun cmdSAdd(key: String, vararg member: ByteArray): Command = cmdSAdd(key.toByteArray(Charsets.UTF_8), *member)
 public fun cmdSAdd(key: String, vararg member: String): Command = cmdSAdd(key.toByteArray(Charsets.UTF_8), *member)
-public fun cmdSAdd(key: ByteArray, member: ByteArray): Command = twoParamCommand(Command.SADD, key, member)
+public fun cmdSAdd(key: ByteArray, vararg member: ByteArray): Command = keyAndVarargParamCommand(Command.SADD, key, *member)
 public fun cmdSAdd(key: ByteArray, vararg member: String): Command = keyAndVarargParamCommand(Command.SADD, key, *member)
 
 /**
@@ -1352,7 +1275,7 @@ public fun cmdSave(): Command = singleCommand(Command.SAVE)
  *  Integer reply: the cardinality (number of elements) of the set, or 0 if key does not exist. 
  */
 public fun cmdSCard(key: String): Command = cmdSCard(key.toByteArray(Charsets.UTF_8))
-public fun cmdSCard(key: ByteArray): Command = oneParamCommand(Command.SCARD, key)
+public fun cmdSCard(key: ByteArray): Command = varargParamCommand(Command.SCARD, key)
 
 /**
  * SCRIPT DEBUG YES|SYNC|NO 
@@ -1361,7 +1284,7 @@ public fun cmdSCard(key: ByteArray): Command = oneParamCommand(Command.SCARD, ke
  *  Simple string reply: OK.
  */
 public fun cmdScriptDebug(mode: ScriptDebugMode): Command =
-    oneParamCommand(Command.SCRIPT_DEBUG,
+    varargParamCommand(Command.SCRIPT_DEBUG,
         when (mode) {
             ScriptDebugMode.YES -> "YES".toByteArray(Charsets.UTF_8)
             ScriptDebugMode.SYNC -> "SYNC".toByteArray(Charsets.UTF_8)
@@ -1403,7 +1326,7 @@ public fun cmdScriptKill(): Command = singleCommand(Command.SCRIPT_KILL)
  * Return value
  *  Array reply: list with members of the resulting set.
  */
-public fun cmdSDiff(key: ByteArray): Command = oneParamCommand(Command.SDIFF, key)
+public fun cmdSDiff(vararg key: ByteArray): Command = varargParamCommand(Command.SDIFF, *key)
 public fun cmdSDiff(vararg key: String): Command = varargParamCommand(Command.SDIFF, *key)
 
 /**
@@ -1412,9 +1335,8 @@ public fun cmdSDiff(vararg key: String): Command = varargParamCommand(Command.SD
  * Return value
  *  Integer reply: the number of elements in the resulting set.
  */
-public fun cmdSDiffStore(destination: String, vararg key: String): Command = cmdSDiffStore(destination.toByteArray(Charsets.UTF_8), *key)
-public fun cmdSDiffStore(destination: ByteArray, key: ByteArray): Command = twoParamCommand(Command.SDIFFSTORE, destination, key)
-public fun cmdSDiffStore(destination: ByteArray, vararg key: String): Command = keyAndVarargParamCommand(Command.SDIFFSTORE, destination, *key)
+public fun cmdSDiffStore(destination: String, vararg key: String): Command = keyAndVarargParamCommand(Command.SDIFFSTORE, destination.toByteArray(Charsets.UTF_8), *key)
+public fun cmdSDiffStore(destination: ByteArray, vararg key: ByteArray): Command = keyAndVarargParamCommand(Command.SDIFFSTORE, destination, *key)
 
 /**
  * SELECT index
@@ -1422,7 +1344,7 @@ public fun cmdSDiffStore(destination: ByteArray, vararg key: String): Command = 
  * Return value
  *  Simple string reply
  */
-public fun cmdSelect(index: Int): Command = oneParamCommand(Command.SELECT, index.toString().toByteArray(Charsets.UTF_8))
+public fun cmdSelect(index: Int): Command = varargParamCommand(Command.SELECT, index.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * SET key value [EX seconds] [PX milliseconds] [NX|XX] 
@@ -1471,18 +1393,7 @@ public fun cmdSet(key: ByteArray, value: ByteArray, pxs: Int = 0, pxms: Long = 0
  *  Simple string reply
  */
 public fun cmdSetEX(key: String, seconds: Int, value: String): Command = cmdSetEX(key.toByteArray(Charsets.UTF_8), seconds, value.toByteArray(Charsets.UTF_8))
-public fun cmdSetEX(key: ByteArray, seconds: Int, value: ByteArray): Command =
-    Command(Command.SETEX, 
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // command + key + seconds + value
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.SETEX)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(seconds)
-            baos.writeAsBulkString(value)
-            baos.toByteArray()
-        }
-    )
+public fun cmdSetEX(key: ByteArray, seconds: Int, value: ByteArray): Command = varargParamCommand(Command.SETEX, key, seconds.toString().toByteArray(Charsets.UTF_8), value)
  
 /**
  * SETNX key value 
@@ -1494,7 +1405,7 @@ public fun cmdSetEX(key: ByteArray, seconds: Int, value: ByteArray): Command =
  */
 public fun cmdSetNX(key: String, value: ByteArray): Command = cmdSetNX(key.toByteArray(Charsets.UTF_8), value)
 public fun cmdSetNX(key: String, value: String): Command = cmdSetNX(key.toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
-public fun cmdSetNX(key: ByteArray, value: ByteArray): Command = twoParamCommand(Command.SETNX, key, value)
+public fun cmdSetNX(key: ByteArray, value: ByteArray): Command = varargParamCommand(Command.SETNX, key, value)
 
 /**
  * SETRANGE key offset value 
@@ -1503,18 +1414,7 @@ public fun cmdSetNX(key: ByteArray, value: ByteArray): Command = twoParamCommand
  *  Integer reply: the length of the string after it was modified by the command.
  */
 public fun cmdSetRange(key: String, offset: Int, value: String): Command = cmdSetRange(key.toByteArray(Charsets.UTF_8), offset, value.toByteArray(Charsets.UTF_8))
-public fun cmdSetRange(key: ByteArray, offset: Int, value: ByteArray): Command =
-    Command(Command.SETRANGE, 
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // command + key + offset + value
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.SETRANGE)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(offset)
-            baos.writeAsBulkString(value)
-            baos.toByteArray()
-        }
-    )
+public fun cmdSetRange(key: ByteArray, offset: Int, value: ByteArray): Command = varargParamCommand(Command.SETRANGE, key, offset.toString().toByteArray(Charsets.UTF_8), value)
 
 /**
  * SHUTDOWN [NOSAVE|SAVE] 
@@ -1523,7 +1423,7 @@ public fun cmdSetRange(key: ByteArray, offset: Int, value: ByteArray): Command =
  *  Simple string reply on error. On success nothing is returned since the server quits and the connection is closed.
  */
 public fun cmdShutdown(option: ShutdownOptions): Command =
-    oneParamCommand(Command.SHUTDOWN,
+    varargParamCommand(Command.SHUTDOWN,
         when (option) {
             ShutdownOptions.NOSAVE -> "NOSAVE".toByteArray(Charsets.UTF_8)
             ShutdownOptions.SAVE -> "SAVE".toByteArray(Charsets.UTF_8)
@@ -1536,7 +1436,7 @@ public fun cmdShutdown(option: ShutdownOptions): Command =
  * Return value
  *  Array reply: list with members of the resulting set.
  */
-public fun cmdSInter(key: ByteArray): Command = oneParamCommand(Command.SINTER, key)
+public fun cmdSInter(vararg key: ByteArray): Command = varargParamCommand(Command.SINTER, *key)
 public fun cmdSInter(vararg key: String): Command = varargParamCommand(Command.SINTER, *key)
 
 /**
@@ -1545,9 +1445,8 @@ public fun cmdSInter(vararg key: String): Command = varargParamCommand(Command.S
  * Return value
  *  Integer reply: the number of elements in the resulting set.
  */
-public fun cmdSInterStore(destination: String, vararg key: String): Command = cmdSInterStore(destination.toByteArray(Charsets.UTF_8), *key)
-public fun cmdSInterStore(destination: ByteArray, key: ByteArray): Command = twoParamCommand(Command.SINTERSTORE, destination, key)
-public fun cmdSInterStore(destination: ByteArray, vararg key: String): Command = keyAndVarargParamCommand(Command.SINTERSTORE, destination, *key)
+public fun cmdSInterStore(destination: String, vararg key: String): Command = keyAndVarargParamCommand(Command.SINTERSTORE, destination.toByteArray(Charsets.UTF_8), *key)
+public fun cmdSInterStore(destination: ByteArray, vararg key: ByteArray): Command = keyAndVarargParamCommand(Command.SINTERSTORE, destination, *key)
  
 /**
  * SISMEMBER key member 
@@ -1559,7 +1458,7 @@ public fun cmdSInterStore(destination: ByteArray, vararg key: String): Command =
  */
 public fun cmdSisMember(key: String, member: ByteArray): Command = cmdSisMember(key.toByteArray(Charsets.UTF_8), member)
 public fun cmdSisMember(key: String, member: String): Command = cmdSisMember(key.toByteArray(Charsets.UTF_8), member.toByteArray(Charsets.UTF_8))
-public fun cmdSisMember(key: ByteArray, member: ByteArray): Command = twoParamCommand(Command.SISMEMBER, key, member)
+public fun cmdSisMember(key: ByteArray, member: ByteArray): Command = varargParamCommand(Command.SISMEMBER, key, member)
 
 /**
  * SLAVEOF host port 
@@ -1580,7 +1479,7 @@ public fun cmdSisMember(key: ByteArray, member: ByteArray): Command = twoParamCo
  *  Array reply: all elements of the set.
  */
 public fun cmdSMembers(key: String): Command = cmdSMembers(key.toByteArray(Charsets.UTF_8))
-public fun cmdSMembers(key: ByteArray): Command = oneParamCommand(Command.SMEMBERS, key)
+public fun cmdSMembers(key: ByteArray): Command = varargParamCommand(Command.SMEMBERS, key)
 
 /**
  * SMOVE source destination member 
@@ -1591,18 +1490,7 @@ public fun cmdSMembers(key: ByteArray): Command = oneParamCommand(Command.SMEMBE
  *   0 if the element is not a member of source and no operation was performed.
  */
 public fun cmdSMove(source: String, destination: String, member: String): Command = cmdSMove(source.toByteArray(Charsets.UTF_8), destination.toByteArray(Charsets.UTF_8), member.toByteArray(Charsets.UTF_8))
-public fun cmdSMove(source: ByteArray, destination: ByteArray, member: ByteArray): Command =
-    Command(Command.SMOVE, 
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // command + source + destination + member
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.SMOVE)
-            baos.writeAsBulkString(source)
-            baos.writeAsBulkString(destination)
-            baos.writeAsBulkString(member)
-            baos.toByteArray()
-        }
-    )
+public fun cmdSMove(source: ByteArray, destination: ByteArray, member: ByteArray): Command = varargParamCommand(Command.SMOVE, source, destination, member)
 
 /**
  * SORT key [BY pattern] [LIMIT offset count] [GET pattern [GET pattern ...]] [ASC|DESC] [ALPHA] [STORE destination]     
@@ -1617,9 +1505,9 @@ public fun cmdSMove(source: ByteArray, destination: ByteArray, member: ByteArray
  *  Bulk string reply: the removed element, or nil when key does not exist.
  */
 public fun cmdSPop(key: String): Command = cmdSPop(key.toByteArray(Charsets.UTF_8))
-public fun cmdSPop(key: ByteArray): Command = oneParamCommand(Command.SPOP, key)
+public fun cmdSPop(key: ByteArray): Command = varargParamCommand(Command.SPOP, key)
 public fun cmdSPop(key: String, count: Int): Command = cmdSPop(key.toByteArray(Charsets.UTF_8), count)
-public fun cmdSPop(key: ByteArray, count: Int): Command = twoParamCommand(Command.SPOP, key, count.toString().toByteArray(Charsets.UTF_8))
+public fun cmdSPop(key: ByteArray, count: Int): Command = varargParamCommand(Command.SPOP, key, count.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * SRANDMEMBER key [count] 
@@ -1628,9 +1516,9 @@ public fun cmdSPop(key: ByteArray, count: Int): Command = twoParamCommand(Comman
  *  Bulk string reply
  */
 public fun cmdSRandMember(key: String): Command = cmdSRandMember(key.toByteArray(Charsets.UTF_8))
-public fun cmdSRandMember(key: ByteArray): Command = oneParamCommand(Command.SRANDMEMBER, key)
+public fun cmdSRandMember(key: ByteArray): Command = varargParamCommand(Command.SRANDMEMBER, key)
 public fun cmdSRandMember(key: String, count: Int): Command = cmdSRandMember(key.toByteArray(Charsets.UTF_8), count)
-public fun cmdSRandMember(key: ByteArray, count: Int): Command = twoParamCommand(Command.SRANDMEMBER, key, count.toString().toByteArray(Charsets.UTF_8))
+public fun cmdSRandMember(key: ByteArray, count: Int): Command = varargParamCommand(Command.SRANDMEMBER, key, count.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * SREM key member [member ...] 
@@ -1638,9 +1526,9 @@ public fun cmdSRandMember(key: ByteArray, count: Int): Command = twoParamCommand
  * Return value
  *  Integer reply: the number of members that were removed from the set, not including non existing members.
  */
-public fun cmdSRem(key: String, member: ByteArray): Command = cmdSRem(key.toByteArray(Charsets.UTF_8), member)
+public fun cmdSRem(key: String, vararg member: ByteArray): Command = cmdSRem(key.toByteArray(Charsets.UTF_8), *member)
 public fun cmdSRem(key: String, vararg member: String): Command = cmdSRem(key.toByteArray(Charsets.UTF_8), *member)
-public fun cmdSRem(key: ByteArray, member: ByteArray): Command = twoParamCommand(Command.SREM, key, member)
+public fun cmdSRem(key: ByteArray, vararg member: ByteArray): Command = keyAndVarargParamCommand(Command.SREM, key, *member)
 public fun cmdSRem(key: ByteArray, vararg member: String): Command = keyAndVarargParamCommand(Command.SREM, key, *member)
 
 /**
@@ -1656,13 +1544,13 @@ public fun cmdSRem(key: ByteArray, vararg member: String): Command = keyAndVarar
  *  Integer reply: the length of the string at key, or 0 when key does not exist.
  */
 public fun cmdStrLen(key: String): Command = cmdStrLen(key.toByteArray(Charsets.UTF_8))
-public fun cmdStrLen(key: ByteArray): Command = oneParamCommand(Command.STRLEN, key)
+public fun cmdStrLen(key: ByteArray): Command = varargParamCommand(Command.STRLEN, key)
 
 /**
  * SUBSCRIBE channel [channel ...] 
  * Available since 2.0.0.
  */
-public fun cmdSubscribe(channel: ByteArray): Command = oneParamCommand(Command.SUBSCRIBE, channel)
+public fun cmdSubscribe(vararg channel: ByteArray): Command = varargParamCommand(Command.SUBSCRIBE, *channel)
 public fun cmdSubscribe(vararg channel: String): Command = varargParamCommand(Command.SUBSCRIBE, *channel)
  
 /**
@@ -1671,7 +1559,7 @@ public fun cmdSubscribe(vararg channel: String): Command = varargParamCommand(Co
  * Return value
  *  Array reply: list with members of the resulting set.
  */
-public fun cmdSUnion(key: ByteArray): Command = oneParamCommand(Command.SUNION, key)
+public fun cmdSUnion(vararg key: ByteArray): Command = varargParamCommand(Command.SUNION, *key)
 public fun cmdSUnion(vararg key: String): Command = varargParamCommand(Command.SUNION, *key)
 
 /**
@@ -1681,7 +1569,7 @@ public fun cmdSUnion(vararg key: String): Command = varargParamCommand(Command.S
  *  Integer reply: the number of elements in the resulting set.
  */
 public fun cmdSUnionStore(destination: String, vararg key: String): Command = cmdSUnionStore(destination.toByteArray(Charsets.UTF_8), *key)
-public fun cmdSUnionStore(destination: ByteArray, key: ByteArray): Command = twoParamCommand(Command.SUNIONSTORE, destination, key)
+public fun cmdSUnionStore(destination: ByteArray, vararg key: ByteArray): Command = keyAndVarargParamCommand(Command.SUNIONSTORE, destination, *key)
 public fun cmdSUnionStore(destination: ByteArray, vararg key: String): Command = keyAndVarargParamCommand(Command.SUNIONSTORE, destination, *key)
  
 /**
@@ -1690,7 +1578,7 @@ public fun cmdSUnionStore(destination: ByteArray, vararg key: String): Command =
  * Return value
  *  Simple string reply: OK
  */
-public fun cmdSwapDB(index1: Int, index2: Int): Command = twoParamCommand(Command.SWAPDB, index1.toString().toByteArray(Charsets.UTF_8), index2.toString().toByteArray(Charsets.UTF_8))
+public fun cmdSwapDB(index1: Int, index2: Int): Command = varargParamCommand(Command.SWAPDB, index1.toString().toByteArray(Charsets.UTF_8), index2.toString().toByteArray(Charsets.UTF_8))
 
 /**
  * SYNC
@@ -1715,7 +1603,7 @@ public fun cmdTime(): Command = singleCommand(Command.TIME)
  * Return value
  *  Integer reply: The number of keys that were touched.
  */
-public fun cmdTouch(key: ByteArray): Command = oneParamCommand(Command.TOUCH, key)
+public fun cmdTouch(vararg key: ByteArray): Command = varargParamCommand(Command.TOUCH, *key)
 public fun cmdTouch(vararg key: String): Command = varargParamCommand(Command.TOUCH, *key)
 
 /**
@@ -1725,7 +1613,7 @@ public fun cmdTouch(vararg key: String): Command = varargParamCommand(Command.TO
  *  Integer reply: TTL in seconds, or a negative value in order to signal an error
  */
 public fun cmdTtl(key: String): Command = cmdTtl(key.toByteArray(Charsets.UTF_8))
-public fun cmdTtl(key: ByteArray): Command = oneParamCommand(Command.TTL, key)
+public fun cmdTtl(key: ByteArray): Command = varargParamCommand(Command.TTL, key)
 
 /**
  * TYPE key 
@@ -1734,14 +1622,14 @@ public fun cmdTtl(key: ByteArray): Command = oneParamCommand(Command.TTL, key)
  *  Simple string reply: type of key, or none when key does not exist.
  */
 public fun cmdType(key: String): Command = cmdType(key.toByteArray(Charsets.UTF_8))
-public fun cmdType(key: ByteArray): Command = oneParamCommand(Command.TYPE, key)
+public fun cmdType(key: ByteArray): Command = varargParamCommand(Command.TYPE, key)
 
 /**
  * UNSUBSCRIBE [channel [channel ...]]
  * Available since 2.0.0.
  */
 public fun cmdUnsubscribe(): Command = singleCommand(Command.UNSUBSCRIBE)
-public fun cmdUnsubscribe(channel: ByteArray): Command = oneParamCommand(Command.UNSUBSCRIBE, channel)
+public fun cmdUnsubscribe(vararg channel: ByteArray): Command = varargParamCommand(Command.UNSUBSCRIBE, *channel)
 public fun cmdUnsubscribe(vararg channel: String): Command = varargParamCommand(Command.UNSUBSCRIBE, *channel)
 
 /**
@@ -1750,7 +1638,7 @@ public fun cmdUnsubscribe(vararg channel: String): Command = varargParamCommand(
  * Return value
  *  Integer reply: The number of keys that were unlinked.
  */
-public fun cmdUnLink(key: ByteArray): Command = oneParamCommand(Command.UNLINK, key)
+public fun cmdUnLink(vararg key: ByteArray): Command = varargParamCommand(Command.UNLINK, *key)
 public fun cmdUnLink(vararg key: String): Command = varargParamCommand(Command.UNLINK, *key)
 
 /**
@@ -1773,7 +1661,7 @@ public fun cmdUnwatch(): Command = singleCommand(Command.UNWATCH)
  * Return value
  *  Simple string reply: always OK.
  */
-public fun cmdWatch(key: ByteArray): Command = oneParamCommand(Command.WATCH, key)
+public fun cmdWatch(vararg key: ByteArray): Command = varargParamCommand(Command.WATCH, *key)
 public fun cmdWatch(vararg key: String): Command = varargParamCommand(Command.WATCH, *key)
 
 /**
@@ -1789,7 +1677,7 @@ public fun cmdWatch(vararg key: String): Command = varargParamCommand(Command.WA
  *  Integer reply: the cardinality (number of elements) of the sorted set, or 0 if key does not exist.
  */
 public fun cmdZCard(key: String): Command = cmdZCard(key.toByteArray(Charsets.UTF_8))
-public fun cmdZCard(key: ByteArray): Command = oneParamCommand(Command.ZCARD, key)
+public fun cmdZCard(key: ByteArray): Command = varargParamCommand(Command.ZCARD, key)
 
 /**
  * ZCOUNT key min max 
@@ -1804,18 +1692,7 @@ public fun cmdZCard(key: ByteArray): Command = oneParamCommand(Command.ZCARD, ke
  *  Bulk string reply: the new score of member (a double precision floating point number), represented as string.
  */
 public fun cmdZIncrBy(key: String, increment: Int, member: String): Command = cmdZIncrBy(key.toByteArray(Charsets.UTF_8), increment, member.toByteArray(Charsets.UTF_8))
-public fun cmdZIncrBy(key: ByteArray, increment: Int, member: ByteArray): Command =
-    Command(Command.ZINCRBY,
-        ByteArrayOutputStream().use { baos ->
-            val size = 4 // komanda + key + increment + member
-            baos.writeAsArrayStart(size)
-            baos.writeAsBulkString(Command.ZINCRBY)
-            baos.writeAsBulkString(key)
-            baos.writeAsBulkString(increment)
-            baos.writeAsBulkString(member)
-            baos.toByteArray()
-        }
-    )
+public fun cmdZIncrBy(key: ByteArray, increment: Int, member: ByteArray): Command = varargParamCommand(Command.ZINCRBY, key, increment.toString().toByteArray(Charsets.UTF_8), member)
 
 /**
  * ZINTERSTORE destination numkeys key [key ...] [WEIGHTS weight [weight ...]] [AGGREGATE SUM|MIN|MAX] 
@@ -1904,7 +1781,7 @@ public fun cmdZIncrBy(key: ByteArray, increment: Int, member: ByteArray): Comman
  */
 public fun cmdZRevRank(key: String, member: String): Command = cmdZRevRank(key.toByteArray(Charsets.UTF_8), member.toByteArray(Charsets.UTF_8))
 public fun cmdZRevRank(key: String, member: ByteArray): Command = cmdZRevRank(key.toByteArray(Charsets.UTF_8), member)
-public fun cmdZRevRank(key: ByteArray, member: ByteArray): Command = twoParamCommand(Command.ZREVRANK, key, member)
+public fun cmdZRevRank(key: ByteArray, member: ByteArray): Command = varargParamCommand(Command.ZREVRANK, key, member)
 
 /**
  * ZSCAN key cursor [MATCH pattern] [COUNT count] 
@@ -1920,7 +1797,7 @@ public fun cmdZRevRank(key: ByteArray, member: ByteArray): Command = twoParamCom
  */
 public fun cmdZScore(key: String, member: String): Command = cmdZScore(key.toByteArray(Charsets.UTF_8), member.toByteArray(Charsets.UTF_8))
 public fun cmdZScore(key: String, member: ByteArray): Command = cmdZScore(key.toByteArray(Charsets.UTF_8), member)
-public fun cmdZScore(key: ByteArray, member: ByteArray): Command = twoParamCommand(Command.ZSCORE, key, member)
+public fun cmdZScore(key: ByteArray, member: ByteArray): Command = varargParamCommand(Command.ZSCORE, key, member)
 
 /**
  * ZUNIONSTORE destination numkeys key [key ...] [WEIGHTS weight [weight ...]] [AGGREGATE SUM|MIN|MAX] 
