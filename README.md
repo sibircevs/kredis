@@ -1,11 +1,12 @@
-# kredis
-KRedis
+# KRedis
 KRedis is simple Redis kotlin client.
+
+Request-Response part is implemented now.
 
 KRedis is EASY to use.
 
-How do I use it?
-
+# How do I use it?
+```
 fun main(args: Array<String>) {
     val rs = RedisClient("localhost", 6379)
     rs.connect()
@@ -21,3 +22,4 @@ fun main(args: Array<String>) {
     println("Command List replies -> $ccyReply")
     rs.close()
 }
+```
